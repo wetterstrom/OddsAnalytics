@@ -18,13 +18,17 @@ jobs:
       - name: Setup .NET SDK
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: '8.0.x'
+          dotnet-version: '10.0.x'
 
-      - name: Publish Blazor WASM (utan komprimering)
+      - name: Publish Blazor WASM
         run: dotnet publish -c Release -o release -p:BlazorEnableCompression=false
 
-      - name: Fix Jekyll, SPA Routing & Base Href
+      - name: Fix Fingerprinted Blazor Script & GitHub Pages Files
         run: |
+          # 1. Skapa kopia av det hashade skriptet till det standardnamn index.html förväntar sig
+          cp release/wwwroot/_framework/blazor.webassembly.*.js release/wwwroot/_framework/blazor.webassembly.js
+          
+          # 2. Skapa .nojekyll och 404-routing
           touch release/wwwroot/.nojekyll
           cp release/wwwroot/index.html release/wwwroot/404.html
 
@@ -39,18 +43,7 @@ jobs:
           }
           EOF
 
-      - name: Felsökning - Lista och verifiera publish-filer
-        run: |
-          echo "=== 1. Innehåll i release/wwwroot ==="
-          ls -la release/wwwroot
-          echo "=== 2. Finns .nojekyll? ==="
-          ls -la release/wwwroot/.nojekyll
-          echo "=== 3. Innehåll i _framework ==="
-          ls -la release/wwwroot/_framework || true
-          echo "=== 4. Sök efter blazor.webassembly.js ==="
-          find release/wwwroot -name "*blazor.webassembly*" || true
-
-      - name: Deploy till gh-pages grenen
+      - name: Deploy to gh-pages branch
         uses: JamesIves/github-pages-deploy-action@v4
         with:
           folder: release/wwwroot
