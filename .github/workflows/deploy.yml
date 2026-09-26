@@ -1,0 +1,45 @@
+﻿name: Deploy to GitHub Pages
+
+on:
+  push:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup .NET SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Inject API Secrets into appsettings.json
+        run: |
+          mkdir -p wwwroot
+          cat <<EOF > wwwroot/appsettings.json
+          {
+            "ApiKeys": {
+              "FootballApi": "${{ secrets.FOOTBALL_API_KEY }}",
+              "OddsApi": "${{ secrets.ODDS_API_KEY }}"
+            }
+          }
+          EOF
+
+      - name: Publish Blazor WASM
+        run: dotnet publish -c Release -o release
+
+      - name: Fix SPA Routing for GitHub Pages (404.html)
+        run: cp release/wwwroot/index.html release/wwwroot/404.html
+
+      - name: Deploy to GitHub Pages
+        uses: JamesIves/github-pages-deploy-action@v4
+        with:
+          folder: release/wwwroot
+          branch: gh-pages
