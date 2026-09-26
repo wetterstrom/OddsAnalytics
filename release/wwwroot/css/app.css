@@ -1,0 +1,162 @@
+﻿@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap');
+
+:root {
+    --bg-page: #0f172a;        /* Elegant midnattsblå/skiffer */
+    --bg-card: #1e293b;        /* Ljusare kortbakgrund för stark separation */
+    --bg-card-inner: #0f172a;  /* Inre sektioner */
+    --border-card: #334155;    /* Klar, synlig ram */
+    --text-primary: #ffffff;   /* Knivskarp vit */
+    --text-secondary: #cbd5e1; /* Mycket lättläst ljusgrå för alla labels */
+    --text-muted: #94a3b8;     /* Dämpad text som ändå syns tydligt */
+    --accent-blue: #38bdf8;
+    --accent-green: #34d399;
+    --accent-amber: #fbbf24;
+}
+
+body {
+    font-family: 'Plus Jakarta Sans', sans-serif;
+    background-color: var(--bg-page);
+    color: var(--text-primary);
+    min-height: 100vh;
+}
+
+/* Kort med tydlig separation */
+.analytics-card {
+    background-color: var(--bg-card);
+    border: 1px solid var(--border-card);
+    border-radius: 12px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25);
+}
+
+.brand-title {
+    font-weight: 800;
+    color: #ffffff;
+    letter-spacing: -0.02em;
+}
+
+/* Tvinga alla labels och småtexter att bli ljusa och läsbara */
+label, .form-label, .card-label {
+    color: var(--text-secondary) !important;
+    font-weight: 600;
+    font-size: 0.82rem;
+    letter-spacing: 0.02em;
+}
+
+/* Tabellstyling */
+.table, .table > :not(caption) > * > * {
+    background-color: transparent !important;
+    color: #f8fafc !important;
+    border-bottom: 1px solid var(--border-card) !important;
+}
+
+.table thead th {
+    background-color: #0f172a !important;
+    color: var(--text-secondary) !important;
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    padding: 12px 14px;
+    border-bottom: 2px solid var(--border-card) !important;
+}
+
+.table tbody tr:hover td {
+    background-color: rgba(255, 255, 255, 0.05) !important;
+}
+
+/* Formulär, knappar och inputs */
+.form-select, .form-control {
+    background-color: #0f172a !important;
+    border: 1px solid var(--border-card) !important;
+    color: #ffffff !important;
+    border-radius: 8px;
+    font-size: 0.92rem;
+    font-weight: 500;
+}
+
+.form-select:focus, .form-control:focus {
+    border-color: var(--accent-blue) !important;
+    box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.3) !important;
+}
+
+/* Flikväljare */
+.nav-pills-custom {
+    background: #1e293b;
+    border: 1px solid var(--border-card);
+    padding: 6px;
+    border-radius: 10px;
+}
+
+.nav-pills-custom .nav-link {
+    color: var(--text-secondary);
+    border-radius: 8px;
+    padding: 9px 18px;
+    font-weight: 600;
+    font-size: 0.92rem;
+}
+
+.nav-pills-custom .nav-link.active {
+    background-color: #0284c7;
+    color: #ffffff;
+    box-shadow: 0 2px 8px rgba(2, 132, 199, 0.4);
+}
+
+/* Heatmap Grid */
+.heatmap-grid {
+    display: grid;
+    grid-template-columns: 85px repeat(6, 1fr);
+    gap: 8px;
+    user-select: none;
+}
+
+.heatmap-header {
+    font-size: 0.8rem;
+    font-weight: 700;
+    color: var(--text-secondary);
+    text-align: center;
+    padding: 6px 0;
+}
+
+.heatmap-row-label {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    padding-right: 12px;
+    font-size: 0.8rem;
+    font-weight: 700;
+    color: var(--text-secondary);
+}
+
+.heatmap-cell {
+    aspect-ratio: 1.1;
+    border-radius: 8px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    transition: transform 0.15s ease;
+}
+
+.heatmap-cell:hover {
+    transform: scale(1.05);
+    border-color: rgba(255, 255, 255, 0.5);
+    z-index: 2;
+}
+
+.heatmap-cell.top-pick {
+    border: 2px solid #fbbf24 !important;
+    box-shadow: 0 0 14px rgba(251, 191, 36, 0.6);
+}
+
+.heatmap-prob {
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 700;
+    font-size: 0.95rem;
+    color: #ffffff;
+}
+
+.heatmap-odds {
+    font-size: 0.72rem;
+    color: #f1f5f9;
+}

@@ -20,15 +20,11 @@ jobs:
         with:
           dotnet-version: '10.0.x'
 
-      - name: Publish Blazor WASM
-        run: dotnet publish -c Release -o release -p:BlazorEnableCompression=false
+      - name: Publish Blazor WASM (Clean Names)
+        run: dotnet publish -c Release -o release -p:BlazorEnableCompression=false -p:WasmFingerprintAssets=false
 
-      - name: Fix Fingerprinted Blazor Script & GitHub Pages Files
+      - name: Setup GitHub Pages files
         run: |
-          # 1. Skapa kopia av det hashade skriptet till det standardnamn index.html förväntar sig
-          cp release/wwwroot/_framework/blazor.webassembly.*.js release/wwwroot/_framework/blazor.webassembly.js
-          
-          # 2. Skapa .nojekyll och 404-routing
           touch release/wwwroot/.nojekyll
           cp release/wwwroot/index.html release/wwwroot/404.html
 
