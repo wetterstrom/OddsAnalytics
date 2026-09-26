@@ -6,34 +6,26 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
-  pages: write
-  id-token: write
-
-concurrency:
-  group: "pages"
-  cancel-in-progress: false
+  contents: write
 
 jobs:
-  build:
+  build-and-deploy:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
+      - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Setup .NET
+      - name: Setup .NET SDK
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '8.0.x'
 
-      - name: Publish Blazor WASM
-        run: dotnet publish -c Release -o release
+      - name: Publish Blazor WASM (utan komprimering)
+        run: dotnet publish -c Release -o release -p:BlazorEnableCompression=false
 
-      - name: Fix Base Href, SPA Routing and Jekyll
+      - name: Fix Jekyll, SPA Routing & Base Href
         run: |
           touch release/wwwroot/.nojekyll
-          sed -i 's|<base href="/" />|<base href="/OddsAnalytics/" />|g' release/wwwroot/index.html
-          sed -i 's|<base href="./" />|<base href="/OddsAnalytics/" />|g' release/wwwroot/index.html
           cp release/wwwroot/index.html release/wwwroot/404.html
 
       - name: Inject API Secrets into appsettings.json
@@ -47,18 +39,19 @@ jobs:
           }
           EOF
 
-      - name: Upload Pages Artifact
-        uses: actions/upload-pages-artifact@v3
-        with:
-          path: release/wwwroot
+      - name: Felsökning - Lista och verifiera publish-filer
+        run: |
+          echo "=== 1. Innehåll i release/wwwroot ==="
+          ls -la release/wwwroot
+          echo "=== 2. Finns .nojekyll? ==="
+          ls -la release/wwwroot/.nojekyll
+          echo "=== 3. Innehåll i _framework ==="
+          ls -la release/wwwroot/_framework || true
+          echo "=== 4. Sök efter blazor.webassembly.js ==="
+          find release/wwwroot -name "*blazor.webassembly*" || true
 
-  deploy:
-    needs: build
-    runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    steps:
-      - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v4
+      - name: Deploy till gh-pages grenen
+        uses: JamesIves/github-pages-deploy-action@v4
+        with:
+          folder: release/wwwroot
+          branch: gh-pages
