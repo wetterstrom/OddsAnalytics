@@ -20,13 +20,28 @@ jobs:
         with:
           dotnet-version: '8.0.x'
 
-      - name: Publish
+      - name: Publish Blazor WASM
         run: dotnet publish -c Release -o release
 
-      - name: Fix SPA 404
-        run: cp release/wwwroot/index.html release/wwwroot/404.html
+      - name: Fix GitHub Pages Paths & Jekyll
+        run: |
+          touch release/wwwroot/.nojekyll
+          sed -i 's|<base href="/" />|<base href="/OddsAnalytics/" />|g' release/wwwroot/index.html
+          sed -i 's|<base href="./" />|<base href="/OddsAnalytics/" />|g' release/wwwroot/index.html
+          cp release/wwwroot/index.html release/wwwroot/404.html
 
-      - name: Deploy
+      - name: Inject API Secrets into appsettings.json
+        run: |
+          cat <<EOF > release/wwwroot/appsettings.json
+          {
+            "ApiKeys": {
+              "FootballApi": "${{ secrets.FOOTBALL_API_KEY }}",
+              "OddsApi": "${{ secrets.ODDS_API_KEY }}"
+            }
+          }
+          EOF
+
+      - name: Deploy to GitHub Pages
         uses: JamesIves/github-pages-deploy-action@v4
         with:
           folder: release/wwwroot
