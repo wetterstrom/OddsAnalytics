@@ -23,23 +23,12 @@ jobs:
       - name: Publish Blazor WASM
         run: dotnet publish -c Release -o release
 
-      - name: Fix GitHub Pages Paths & Jekyll
+      - name: Disable Jekyll and fix base href
         run: |
           touch release/wwwroot/.nojekyll
           sed -i 's|<base href="/" />|<base href="/OddsAnalytics/" />|g' release/wwwroot/index.html
           sed -i 's|<base href="./" />|<base href="/OddsAnalytics/" />|g' release/wwwroot/index.html
           cp release/wwwroot/index.html release/wwwroot/404.html
-
-      - name: Inject API Secrets into appsettings.json
-        run: |
-          cat <<EOF > release/wwwroot/appsettings.json
-          {
-            "ApiKeys": {
-              "FootballApi": "${{ secrets.FOOTBALL_API_KEY }}",
-              "OddsApi": "${{ secrets.ODDS_API_KEY }}"
-            }
-          }
-          EOF
 
       - name: Deploy to GitHub Pages
         uses: JamesIves/github-pages-deploy-action@v4
