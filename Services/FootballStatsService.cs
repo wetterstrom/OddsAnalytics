@@ -23,7 +23,7 @@ public class FootballStatsService
             return cached;
         }
 
-        var request = new HttpRequestMessage(HttpMethod.Get, $"https://v3.football.api-sports.io/standings?league={leagueId}&season={season}");
+        var request = new HttpRequestMessage(HttpMethod.Get, $"https://football-proxy.robinwetterstrom.workers.dev/standings?league={leagueId}&season={season}");
         if (!string.IsNullOrWhiteSpace(_apiKey))
         {
             request.Headers.Add("x-apisports-key", _apiKey);
