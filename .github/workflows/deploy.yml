@@ -20,17 +20,10 @@ jobs:
         with:
           dotnet-version: '10.0.x'
 
-      - name: Publish Blazor WASM (Clean Names)
-        run: dotnet publish -c Release -o release -p:BlazorEnableCompression=false -p:WasmFingerprintAssets=false
-
-      - name: Setup GitHub Pages files
+      - name: Inject API Secrets BEFORE build
         run: |
-          touch release/wwwroot/.nojekyll
-          cp release/wwwroot/index.html release/wwwroot/404.html
-
-      - name: Inject API Secrets into appsettings.json
-        run: |
-          cat <<EOF > release/wwwroot/appsettings.json
+          mkdir -p OddsAnalytics/wwwroot
+          cat <<EOF > OddsAnalytics/wwwroot/appsettings.json
           {
             "ApiKeys": {
               "FootballApi": "${{ secrets.FOOTBALL_API_KEY }}",
@@ -38,6 +31,14 @@ jobs:
             }
           }
           EOF
+
+      - name: Publish Blazor WASM
+        run: dotnet publish OddsAnalytics/OddsAnalytics.csproj -c Release -o release -p:BlazorEnableCompression=false -p:WasmFingerprintAssets=false
+
+      - name: Setup GitHub Pages files
+        run: |
+          touch release/wwwroot/.nojekyll
+          cp release/wwwroot/index.html release/wwwroot/404.html
 
       - name: Deploy to gh-pages branch
         uses: JamesIves/github-pages-deploy-action@v4
