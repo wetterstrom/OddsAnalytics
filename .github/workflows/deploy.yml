@@ -20,10 +20,14 @@ jobs:
         with:
           dotnet-version: '10.0.x'
 
-      - name: Inject API Secrets BEFORE build
+      - name: Find Project and Inject API Secrets
         run: |
-          mkdir -p OddsAnalytics/wwwroot
-          cat <<EOF > OddsAnalytics/wwwroot/appsettings.json
+          PROJECT_FILE=$(find . -maxdepth 3 -name "*.csproj" | head -n 1)
+          echo "Found project file: $PROJECT_FILE"
+          PROJECT_DIR=$(dirname "$PROJECT_FILE")
+          
+          mkdir -p "$PROJECT_DIR/wwwroot"
+          cat <<EOF > "$PROJECT_DIR/wwwroot/appsettings.json"
           {
             "ApiKeys": {
               "FootballApi": "${{ secrets.FOOTBALL_API_KEY }}",
@@ -33,7 +37,9 @@ jobs:
           EOF
 
       - name: Publish Blazor WASM
-        run: dotnet publish OddsAnalytics/OddsAnalytics.csproj -c Release -o release -p:BlazorEnableCompression=false -p:WasmFingerprintAssets=false
+        run: |
+          PROJECT_FILE=$(find . -maxdepth 3 -name "*.csproj" | head -n 1)
+          dotnet publish "$PROJECT_FILE" -c Release -o release -p:BlazorEnableCompression=false -p:WasmFingerprintAssets=false
 
       - name: Setup GitHub Pages files
         run: |
