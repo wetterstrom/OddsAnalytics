@@ -1,4 +1,9 @@
 wwwroot/appsettings.json
 bin/
 obj/
+/release/
 
+
+.vs/
+bin/
+obj/

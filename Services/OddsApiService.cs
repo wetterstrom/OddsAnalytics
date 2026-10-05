@@ -1,5 +1,4 @@
 ﻿using System.Net.Http.Json;
-using Microsoft.Extensions.Configuration;
 using OddsAnalytics.Models;
 
 namespace OddsAnalytics.Services;
@@ -7,22 +6,17 @@ namespace OddsAnalytics.Services;
 public class OddsApiService
 {
     private readonly HttpClient _http;
-    private readonly string _apiKey;
 
-    public OddsApiService(HttpClient http, IConfiguration config)
+    public OddsApiService(HttpClient http)
     {
         _http = http;
-        _apiKey = config["ApiKeys:OddsApi"] ?? "";
     }
 
     public async Task<List<ExtractedMatchOdds>> FetchUpcomingOddsAsync(string sportKey)
     {
-        if (string.IsNullOrWhiteSpace(_apiKey))
-            return GetDemoMatches(sportKey);
-
         try
         {
-            var url = $"https://api.the-odds-api.com/v4/sports/{sportKey}/odds/?apiKey={_apiKey}&regions=eu&markets=h2h&oddsFormat=decimal";
+            var url = $"https://football-proxy.robinwetterstrom.workers.dev/odds/{Uri.EscapeDataString(sportKey)}";
             var matches = await _http.GetFromJsonAsync<List<OddsApiResponse>>(url);
 
             if (matches == null || matches.Count == 0)

@@ -1,5 +1,4 @@
 ﻿using System.Net.Http.Json;
-using Microsoft.Extensions.Configuration;
 using OddsAnalytics.Models;
 
 namespace OddsAnalytics.Services;
@@ -7,13 +6,11 @@ namespace OddsAnalytics.Services;
 public class FootballStatsService
 {
     private readonly HttpClient _http;
-    private readonly string _apiKey;
     private static readonly Dictionary<int, List<Team>> _cache = new();
 
-    public FootballStatsService(HttpClient http, IConfiguration config)
+    public FootballStatsService(HttpClient http)
     {
         _http = http;
-        _apiKey = config["ApiKeys:FootballApi"] ?? "";
     }
 
     public async Task<List<Team>> FetchLeagueStatsAsync(int leagueId, string leagueName, int season = 2024)
@@ -23,15 +20,9 @@ public class FootballStatsService
             return cached;
         }
 
-        var request = new HttpRequestMessage(HttpMethod.Get, $"https://football-proxy.robinwetterstrom.workers.dev/standings?league={leagueId}&season={season}");
-        if (!string.IsNullOrWhiteSpace(_apiKey))
-        {
-            request.Headers.Add("x-apisports-key", _apiKey);
-        }
-
         try
         {
-            var response = await _http.SendAsync(request);
+            var response = await _http.GetAsync($"https://football-proxy.robinwetterstrom.workers.dev/standings?league={leagueId}&season={season}");
             if (!response.IsSuccessStatusCode)
                 return GetDefaultTeams(leagueName);
 
