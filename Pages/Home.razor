@@ -1,6 +1,7 @@
 ﻿@page "/"
 @inject OddsAnalytics.Services.OddsApiService OddsService
 @inject OddsAnalytics.Services.FootballStatsService StatsService
+@inject OddsAnalytics.Services.MatchAnalyzerService MatchAnalyzer
 @using OddsAnalytics.Models
 @using OddsAnalytics.Services
 
@@ -29,7 +30,7 @@
             <div class="col-md-4">
                 <label class="form-label mb-1">VALD LIGA</label>
                 <select class="form-select form-select-sm" @bind="selectedLeagueKey" @bind:after="OnLeagueChanged">
-                    @foreach (var group in LeagueRepository.AllLeagues.GroupBy(l => l.Country))
+                    @foreach (var group in FootballLeagueRepository.AllLeagues.GroupBy(l => l.Country))
                     {
                         <optgroup label="@group.Key">
                             @foreach (var league in group)
@@ -319,7 +320,7 @@
                             }
                             else
                             {
-                                <span class="badge bg-warning bg-opacity-25 text-warning border border-warning">⚠️ Lag saknas i tabell (Fallback)</span>
+                                <span class="badge bg-warning bg-opacity-25 text-warning border border-warning">⚠️ Statistik saknas</span>
                             }
                         </div>
                     </div>
@@ -432,17 +433,17 @@
 
             <div class="heatmap-grid mb-2">
                 <div></div>
-                @for (int away = 0; away <= 5; away++)
+                @for (int away = 0; away < scoreMatrix.GetLength(1); away++)
                 {
                     <div class="heatmap-header">@away (@awayTeam)</div>
                 }
 
-                @for (int home = 0; home <= 5; home++)
+                @for (int home = 0; home < scoreMatrix.GetLength(0); home++)
                 {
                     int h = home;
                     <div class="heatmap-row-label">@h (@homeTeam)</div>
 
-                    @for (int away = 0; away <= 5; away++)
+                    @for (int away = 0; away < scoreMatrix.GetLength(1); away++)
                     {
                         int a = away;
                         double p = scoreMatrix[h, a];
@@ -466,7 +467,7 @@
 
 @code {
     private string selectedLeagueKey = "epl";
-    private LeagueConfig currentConfig => LeagueRepository.AllLeagues.FirstOrDefault(l => l.Key == selectedLeagueKey) ?? LeagueRepository.AllLeagues[0];
+    private FootballLeagueConfig currentConfig => FootballLeagueRepository.AllLeagues.FirstOrDefault(l => l.Key == selectedLeagueKey) ?? FootballLeagueRepository.AllLeagues[0];
 
     private string activeTab = "today";
     private bool isLoading = false;
@@ -570,10 +571,10 @@
         var today = DateTime.Today;
 
         int index = 0;
-        foreach (var league in LeagueRepository.AllLeagues)
+        foreach (var league in FootballLeagueRepository.AllLeagues)
         {
             index++;
-            scanProgressText = $"Scannar {index}/{LeagueRepository.AllLeagues.Count} ({league.DisplayName})...";
+            scanProgressText = $"Scannar {index}/{FootballLeagueRepository.AllLeagues.Count} ({league.DisplayName})...";
             StateHasChanged();
 
             try
@@ -599,10 +600,10 @@
 
     private void EvaluateAndAddAllMarkets(List<ScannedValueBet> list, ExtractedMatchOdds match, List<Team> teams, string leagueKey, string leagueName)
     {
-        var (lh, la, isVerified) = CalculateLambdas(match.HomeTeam, match.AwayTeam, teams);
-        if (!isVerified) return;
+        var analysis = AnalyzeMatch(match.HomeTeam, match.AwayTeam, teams, leagueKey, leagueName);
+        if (analysis.Probabilities is null) return;
 
-        var p = PoissonEngine.CalculateMatchProbabilities(lh, la);
+        var p = analysis.Probabilities;
 
         // 1X2
         CheckAndAddValueBet(list, match, $"1 ({match.HomeTeam})", p.HomeProb, match.OddsHome, leagueKey, leagueName);
@@ -708,11 +709,6 @@
         marketOddsX = match.OddsDraw;
         marketOdds2 = match.OddsAway;
 
-        var (lh, la, isVerified) = CalculateLambdas(homeTeam, awayTeam, currentTeams);
-        lambdaHome = lh;
-        lambdaAway = la;
-        isCurrentMatchVerified = isVerified;
-
         RecalculateSingle();
     }
 
@@ -771,38 +767,40 @@
         return null;
     }
 
-    private (double, double, bool) CalculateLambdas(string hTeamName, string aTeamName, List<Team> teams)
+    private (Team? HomeTeam, Team? AwayTeam, LeagueConfig? Config, MatchProbabilities? Probabilities) AnalyzeMatch(
+        string homeTeamName,
+        string awayTeamName,
+        List<Team> teams,
+        string leagueKey,
+        string leagueName)
     {
-        var home = FindTeamInStandings(hTeamName, teams);
-        var away = FindTeamInStandings(aTeamName, teams);
+        var home = FindTeamInStandings(homeTeamName, teams);
+        var away = FindTeamInStandings(awayTeamName, teams);
+        if (home is null || away is null || teams.Count == 0) return (home, away, null, null);
 
-        double leagueHomeAvg = teams.Count > 0 ? Math.Round(teams.Average(t => t.HomeGoalsScoredAvg), 2) : 1.54;
-        double leagueAwayAvg = teams.Count > 0 ? Math.Round(teams.Average(t => t.AwayGoalsScoredAvg), 2) : 1.18;
+        double homeGoalsAvg = teams.Average(team => team.HomeGoalsScoredAvg);
+        double awayGoalsAvg = teams.Average(team => team.AwayGoalsScoredAvg);
+        if (homeGoalsAvg <= 0 || awayGoalsAvg <= 0) return (home, away, null, null);
 
-        if (leagueHomeAvg <= 0.4) leagueHomeAvg = 1.50;
-        if (leagueAwayAvg <= 0.4) leagueAwayAvg = 1.15;
-
-        if (home != null && away != null)
-        {
-            double homeAttack = home.HomeGoalsScoredAvg / leagueHomeAvg;
-            double homeDefense = home.HomeGoalsConcededAvg / leagueAwayAvg;
-
-            double awayAttack = away.AwayGoalsScoredAvg / leagueAwayAvg;
-            double awayDefense = away.AwayGoalsConcededAvg / leagueHomeAvg;
-
-            return (
-                Math.Round(homeAttack * awayDefense * leagueHomeAvg, 2),
-                Math.Round(awayAttack * homeDefense * leagueAwayAvg, 2),
-                true
-            );
-        }
-
-        return (1.50, 1.10, false);
+        var config = new LeagueConfig(leagueKey, leagueName, SportCategory.Football, homeGoalsAvg, awayGoalsAvg);
+        return (home, away, config, MatchAnalyzer.Analyze(home, away, config));
     }
 
     private void RecalculateSingle()
     {
-        probs = PoissonEngine.CalculateMatchProbabilities(lambdaHome, lambdaAway);
+        var analysis = AnalyzeMatch(homeTeam, awayTeam, currentTeams, currentConfig.Key, currentConfig.DisplayName);
+        probs = analysis.Probabilities;
+        isCurrentMatchVerified = probs is not null;
+        lambdaHome = probs?.ExpectedHomeGoals ?? 0;
+        lambdaAway = probs?.ExpectedAwayGoals ?? 0;
+        if (probs is null || analysis.HomeTeam is null || analysis.AwayTeam is null || analysis.Config is null)
+        {
+            evaluationResults = new();
+            scoreMatrix = new double[6, 6];
+            topHomeGoals = 0;
+            topAwayGoals = 0;
+            return;
+        }
 
         double synth1X = PoissonEngine.CalculateSyntheticDoubleChanceOdds(marketOdds1, marketOddsX);
         double synthX2 = PoissonEngine.CalculateSyntheticDoubleChanceOdds(marketOdds2, marketOddsX);
@@ -821,12 +819,12 @@
             PoissonEngine.EvaluateBet("Över 2.5 Mål", probs.Over25Prob, marketOddsOver25)
         };
 
-        scoreMatrix = PoissonEngine.GenerateScoreMatrix(lambdaHome, lambdaAway, 5);
+        scoreMatrix = MatchAnalyzer.GenerateScoreMatrix(analysis.HomeTeam, analysis.AwayTeam, analysis.Config);
 
         double maxP = -1;
-        for (int h = 0; h <= 5; h++)
+        for (int h = 0; h < scoreMatrix.GetLength(0); h++)
         {
-            for (int a = 0; a <= 5; a++)
+            for (int a = 0; a < scoreMatrix.GetLength(1); a++)
             {
                 if (scoreMatrix[h, a] > maxP)
                 {

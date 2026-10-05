@@ -18,7 +18,11 @@ public static class PoissonEngine
         return result;
     }
 
-    public static MatchProbabilities CalculateMatchProbabilities(double lambdaHome, double lambdaAway, int maxGoals = 7)
+    public static MatchProbabilities CalculateMatchProbabilities(
+        double lambdaHome,
+        double lambdaAway,
+        int maxGoals = 7,
+        double overUnderLine = 2.5)
     {
         double homeWinProb = 0;
         double drawProb = 0;
@@ -40,7 +44,7 @@ public static class PoissonEngine
                 else if (homeGoals == awayGoals) drawProb += jointProb;
                 else awayWinProb += jointProb;
 
-                if (homeGoals + awayGoals > 2.5) over25Prob += jointProb;
+                if (homeGoals + awayGoals > overUnderLine) over25Prob += jointProb;
                 else under25Prob += jointProb;
 
                 if (homeGoals > 0 && awayGoals > 0) bttsProb += jointProb;
@@ -85,7 +89,10 @@ public static class PoissonEngine
             FairOddsOver25: over25Prob > 0 ? Math.Round(1.0 / over25Prob, 2) : 0,
             ExpectedHomeGoals: Math.Round(lambdaHome, 2),
             ExpectedAwayGoals: Math.Round(lambdaAway, 2)
-        );
+        )
+        {
+            OverUnderLine = overUnderLine
+        };
     }
 
     // Beräknar spelbolagens syntetiska odds för Dubbelchans från 1X2

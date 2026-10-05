@@ -1,0 +1,12 @@
+{
+  "ExpandedNodes": [
+    "",
+    "\\.github",
+    "\\Models",
+    "\\Services",
+    "\\wwwroot",
+    "\\wwwroot\\css"
+  ],
+  "SelectedNode": "\\Models\\FootballApiModels.cs",
+  "PreviewInSolutionExplorer": false
+}

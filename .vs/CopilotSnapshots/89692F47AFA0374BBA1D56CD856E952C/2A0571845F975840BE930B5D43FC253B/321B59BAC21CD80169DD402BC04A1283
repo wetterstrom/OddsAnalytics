@@ -1,0 +1,14 @@
+﻿namespace OddsAnalytics.Models;
+
+public enum SportCategory
+{
+    Football,
+    IceHockey
+}
+
+public sealed record LeagueConfig(
+    string Id,
+    string Name,
+    SportCategory Sport,
+    double HomeGoalsAvg,
+    double AwayGoalsAvg);

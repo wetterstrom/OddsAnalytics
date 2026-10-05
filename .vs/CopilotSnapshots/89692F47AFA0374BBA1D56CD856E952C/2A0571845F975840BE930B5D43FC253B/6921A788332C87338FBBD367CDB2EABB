@@ -1,0 +1,52 @@
+﻿using System;
+using Xunit;
+using Moq;
+using System.Collections.Generic;
+using OddsAnalytics.Models;
+using OddsAnalytics.Services.Predictions;
+
+namespace OddsAnalytics.Tests
+{
+    public class MatchAnalyzerServiceTests
+    {
+        [Fact]
+        public void Analyze_WithHockeyConfig_SelectsHockeyStrategy()
+        {
+            // Arrange
+            var shlConfig = new LeagueConfig("shl", "SHL", SportCategory.IceHockey, 2.9, 2.5);
+            var homeTeam = new Team("Färjestad BK", "SHL", 3.1, 2.1, 0, 0); // Förenklad utifrån din record[cite: 12]
+            var awayTeam = new Team("Skellefteå AIK", "SHL", 0, 0, 2.8, 2.2);
+
+            var footballMock = new Mock<IPredictionStrategy>();
+            footballMock.Setup(s => s.Sport).Returns(SportCategory.Football);
+
+            var hockeyMock = new Mock<IPredictionStrategy>();
+            hockeyMock.Setup(s => s.Sport).Returns(SportCategory.IceHockey);
+
+            // Få mocken att returnera ett tomt resultat för att verifiera att den anropades
+            var expectedResult = new MatchProbabilities(0.5, 0.2, 0.3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+            hockeyMock.Setup(s => s.Calculate(homeTeam, awayTeam, shlConfig)).Returns(expectedResult);
+
+            var strategies = new List<IPredictionStrategy> { footballMock.Object, hockeyMock.Object };
+            var sut = new MatchAnalyzerService(strategies);
+
+            // Act
+            var actualResult = sut.Analyze(homeTeam, awayTeam, shlConfig);
+
+            // Assert
+            hockeyMock.Verify(s => s.Calculate(homeTeam, awayTeam, shlConfig), Times.Once);
+            footballMock.Verify(s => s.Calculate(It.IsAny<Team>(), It.IsAny<Team>(), It.IsAny<LeagueConfig>()), Times.Never);
+        }
+
+        [Fact]
+        public void Calculate_HockeyStrategy_WithZeroLeagueAvg_ThrowsException()
+        {
+            // Arrange (Defensiv programmering test)
+            var config = new LeagueConfig("shl", "SHL", SportCategory.IceHockey, 0, 0); // Ogiltigt värde
+            var sut = new HockeyPredictionStrategy();
+
+            // Act & Assert
+            Assert.Throws<ArgumentException>(() => sut.Calculate(null!, null!, config));
+        }
+    }
+}

@@ -4,9 +4,6 @@ namespace OddsAnalytics.Services;
 
 public class TeamDataService
 {
-    public const double LeagueHomeAvg = 1.54;
-    public const double LeagueAwayAvg = 1.18;
-
     public List<Team> Teams { get; } = new()
     {
         // Allsvenskan
@@ -28,23 +25,4 @@ public class TeamDataService
         new("Tottenham", "Premier League", 2.10, 1.35, 1.60, 1.55),
         new("Newcastle", "Premier League", 2.20, 1.15, 1.45, 1.55)
     };
-
-    public (double lambdaHome, double lambdaAway) CalculateExpectedGoals(string homeName, string awayName)
-    {
-        var home = Teams.FirstOrDefault(t => t.Name == homeName);
-        var away = Teams.FirstOrDefault(t => t.Name == awayName);
-
-        if (home == null || away == null) return (1.50, 1.10);
-
-        double homeAttack = home.HomeGoalsScoredAvg / LeagueHomeAvg;
-        double homeDefense = home.HomeGoalsConcededAvg / LeagueAwayAvg;
-
-        double awayAttack = away.AwayGoalsScoredAvg / LeagueAwayAvg;
-        double awayDefense = away.AwayGoalsConcededAvg / LeagueHomeAvg;
-
-        double lambdaHome = homeAttack * awayDefense * LeagueHomeAvg;
-        double lambdaAway = awayAttack * homeDefense * LeagueAwayAvg;
-
-        return (Math.Round(lambdaHome, 2), Math.Round(lambdaAway, 2));
-    }
 }

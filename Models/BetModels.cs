@@ -21,7 +21,13 @@ public record MatchProbabilities(
     double FairOddsOver25,
     double ExpectedHomeGoals,
     double ExpectedAwayGoals
-);
+)
+{
+    public double OverUnderLine { get; init; } = 2.5;
+    public double OverProbability => Over25Prob;
+    public double UnderProbability => Under25Prob;
+    public double FairOddsOver => FairOddsOver25;
+}
 
 public record ValueBetResult(
     string Outcome,
