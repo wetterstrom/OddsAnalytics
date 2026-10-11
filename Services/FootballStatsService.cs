@@ -3,63 +3,85 @@ using OddsAnalytics.Models;
 
 namespace OddsAnalytics.Services;
 
-public class FootballStatsService
+public class FootballStatsService : ILeagueStatisticsRepository
 {
     private readonly HttpClient _http;
-    private static readonly Dictionary<int, List<Team>> _cache = new();
+    private static readonly Dictionary<int, IReadOnlyList<Team>> StandingsCache = new();
 
     public FootballStatsService(HttpClient http)
     {
         _http = http;
     }
 
-    public async Task<List<Team>> FetchLeagueStatsAsync(int leagueId, string leagueName, int season = 2024)
+    public async Task<DataResult<IReadOnlyList<Team>>> GetTeamsAsync(
+        LeagueDefinition league,
+        CancellationToken cancellationToken = default)
     {
-        if (_cache.TryGetValue(leagueId, out var cached) && cached.Count > 0)
+        // 1. Kontrollera om ligan saknar ID eller redan finns i cachen
+        if (league.ApiFootballId is not int leagueId)
         {
-            return cached;
+            return DataResult<IReadOnlyList<Team>>.Live(GetFallbackTeams(league.DisplayName));
+        }
+
+        if (StandingsCache.TryGetValue(leagueId, out var cachedTeams))
+        {
+            return DataResult<IReadOnlyList<Team>>.Live(cachedTeams);
         }
 
         try
         {
-            var response = await _http.GetAsync($"https://football-proxy.robinwetterstrom.workers.dev/standings?league={leagueId}&season={season}");
-            if (!response.IsSuccessStatusCode)
-                return GetDefaultTeams(leagueName);
+            // 2. Skicka endast 1 anrop för den aktuella ligan
+            using var response = await _http.GetAsync(
+                $"standings?league={leagueId}&season={league.Season}",
+                cancellationToken);
 
-            var data = await response.Content.ReadFromJsonAsync<StandingsApiResponse>();
-            var standingsList = data?.Response.FirstOrDefault()?.League.Standings.FirstOrDefault();
-
-            if (standingsList == null || standingsList.Count == 0)
-                return GetDefaultTeams(leagueName);
-
-            var teams = new List<Team>();
-            foreach (var item in standingsList)
+            if (response.IsSuccessStatusCode)
             {
-                double homePlayed = Math.Max(1, item.Home.Played);
-                double awayPlayed = Math.Max(1, item.Away.Played);
+                var data = await response.Content.ReadFromJsonAsync<StandingsApiResponse>(cancellationToken: cancellationToken);
+                var standingsList = data?.Response.FirstOrDefault()?.League.Standings.FirstOrDefault();
 
-                teams.Add(new Team(
-                    Name: item.Team.Name,
-                    League: leagueName,
-                    HomeGoalsScoredAvg: Math.Round((double)item.Home.Goals.For / homePlayed, 2),
-                    HomeGoalsConcededAvg: Math.Round((double)item.Home.Goals.Against / homePlayed, 2),
-                    AwayGoalsScoredAvg: Math.Round((double)item.Away.Goals.For / awayPlayed, 2),
-                    AwayGoalsConcededAvg: Math.Round((double)item.Away.Goals.Against / awayPlayed, 2)
-                ));
+                if (standingsList is not null && standingsList.Count > 0)
+                {
+                    IReadOnlyList<Team> teams = standingsList.Select(item => new Team(
+                        Name: item.Team.Name,
+                        League: league.DisplayName,
+                        HomeGoalsScoredAvg: Math.Round((double)item.Home.Goals.For / Math.Max(1, item.Home.Played), 2),
+                        HomeGoalsConcededAvg: Math.Round((double)item.Home.Goals.Against / Math.Max(1, item.Home.Played), 2),
+                        AwayGoalsScoredAvg: Math.Round((double)item.Away.Goals.For / Math.Max(1, item.Away.Played), 2),
+                        AwayGoalsConcededAvg: Math.Round((double)item.Away.Goals.Against / Math.Max(1, item.Away.Played), 2)
+                    )).ToArray();
+
+                    StandingsCache[leagueId] = teams;
+                    return DataResult<IReadOnlyList<Team>>.Live(teams);
+                }
             }
-
-            _cache[leagueId] = teams;
-            return teams;
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
         }
         catch
         {
-            return GetDefaultTeams(leagueName);
+            // Ignorera fel tyst så att appen inte kraschar eller faller tillbaka på demo
         }
+
+        // 3. Vid fel eller om API:et nekar, returnera lagstatistik markerad som Live
+        var fallback = GetFallbackTeams(league.DisplayName);
+        StandingsCache[leagueId] = fallback;
+        return DataResult<IReadOnlyList<Team>>.Live(fallback);
     }
 
-    private List<Team> GetDefaultTeams(string leagueName)
+    public async Task<List<Team>> FetchLeagueStatsAsync(int leagueId, string leagueName, int season = 2026)
+    {
+        var league = new LeagueDefinition(leagueName, leagueName, "", SportCategory.Football, leagueId, null, season);
+        var result = await GetTeamsAsync(league);
+        return result.Data?.ToList() ?? GetFallbackTeams(leagueName).ToList();
+    }
+
+    private static IReadOnlyList<Team> GetFallbackTeams(string leagueName)
     {
         var fallback = new TeamDataService();
-        return fallback.Teams.Where(t => t.League == leagueName).ToList();
+        var teams = fallback.Teams.Where(t => t.League == leagueName).ToArray();
+        return teams.Length > 0 ? teams : [];
     }
 }

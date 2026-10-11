@@ -16,12 +16,33 @@ namespace OddsAnalytics
             builder.RootComponents.Add<App>("#app");
             builder.RootComponents.Add<HeadOutlet>("head::after");
 
-            builder.Services.AddScoped(_ => new HttpClient { BaseAddress = new Uri(builder.HostEnvironment.BaseAddress) });
-            builder.Services.AddScoped<FootballStatsService>();
+            var useDevelopmentMocks = builder.HostEnvironment.IsDevelopment();
+            var workerBaseUrl = builder.Configuration["Cloudflare:WorkerBaseUrl"];
+            if (!Uri.TryCreate(workerBaseUrl, UriKind.Absolute, out var workerUri)
+                || workerUri.Scheme != Uri.UriSchemeHttps)
+                throw new InvalidOperationException("Cloudflare:WorkerBaseUrl must be a valid HTTPS URL.");
+
+            builder.Services.AddScoped(_ => new HttpClient { BaseAddress = workerUri });
+            builder.Services.AddScoped<IDemoSportsDataFactory, DemoSportsDataFactory>();
             builder.Services.AddScoped<OddsApiService>();
-            builder.Services.AddScoped<IPredictionStrategy, FootballPredictionStrategy>();
-            builder.Services.AddScoped<IPredictionStrategy, HockeyPredictionStrategy>();
+            builder.Services.AddScoped<FootballStatsService>();
+            builder.Services.AddScoped<IUpcomingMatchRepository>(services =>
+                new DevelopmentFallbackMatchRepository(
+                    new CachedUpcomingMatchRepository(services.GetRequiredService<OddsApiService>()),
+                    services.GetRequiredService<IDemoSportsDataFactory>(),
+                    useDevelopmentMocks));
+            builder.Services.AddScoped<ILeagueStatisticsRepository>(services =>
+                new DevelopmentFallbackStatisticsRepository(
+                    new CachedLeagueStatisticsRepository(services.GetRequiredService<FootballStatsService>()),
+                    services.GetRequiredService<IDemoSportsDataFactory>(),
+                    useDevelopmentMocks));
+            builder.Services.AddScoped<ILeagueAnalysisStrategy, FootballPredictionStrategy>();
+            builder.Services.AddScoped<ILeagueAnalysisStrategy, HockeyPredictionStrategy>();
             builder.Services.AddScoped<MatchAnalyzerService>();
+            builder.Services.AddScoped<DailyBestBetsViewModel>();
+            builder.Services.AddScoped<IStryktipsSystemFactory, StryktipsSystemFactory>();
+            builder.Services.AddScoped<IPoolCouponRepository, SvenskaSpelPoolCouponRepository>();
+            builder.Services.AddScoped<PoolCouponViewModel>();
 
             await builder.Build().RunAsync();
         }

@@ -160,3 +160,448 @@ label, .form-label, .card-label {
     font-size: 0.72rem;
     color: #f1f5f9;
 }
+
+.home-container {
+    max-width: 1250px;
+}
+
+.heatmap-scroll {
+    max-width: 100%;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    -webkit-overflow-scrolling: touch;
+}
+
+@media (max-width: 767.98px) {
+    html,
+    body {
+        overflow-x: hidden;
+    }
+
+    .home-container {
+        width: 100%;
+        max-width: 100%;
+        padding: 1rem 0.75rem !important;
+    }
+
+    .brand-title {
+        font-size: 1.55rem;
+    }
+
+    .analytics-card {
+        border-radius: 14px;
+    }
+
+    .analytics-card.p-4 {
+        padding: 1rem !important;
+    }
+
+    .analytics-card h5 {
+        font-size: 1.05rem;
+        line-height: 1.4;
+    }
+
+    .home-tabs {
+        flex-wrap: nowrap;
+        overflow-x: auto;
+        justify-content: flex-start;
+        overscroll-behavior-x: contain;
+        -webkit-overflow-scrolling: touch;
+        scrollbar-width: thin;
+    }
+
+    .home-tabs .nav-item {
+        flex: 0 0 auto;
+    }
+
+    .home-tabs .nav-link {
+        white-space: nowrap;
+        min-height: 44px;
+    }
+
+    .mobile-filter-row {
+        width: 100%;
+        flex-wrap: wrap;
+    }
+
+    .mobile-filter-row .form-select {
+        width: 100% !important;
+        min-height: 44px;
+    }
+
+    .table-responsive {
+        max-width: 100%;
+        overflow-x: auto;
+        overscroll-behavior-x: contain;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    .table-responsive > .table {
+        min-width: 720px;
+    }
+
+    .heatmap-grid {
+        width: 650px;
+        grid-template-columns: 78px repeat(6, 1fr);
+        gap: 6px;
+    }
+
+    .heatmap-header,
+    .heatmap-row-label {
+        font-size: 0.68rem;
+    }
+
+    .heatmap-row-label {
+        padding-right: 6px;
+    }
+
+    .heatmap-prob {
+        font-size: 0.78rem;
+    }
+
+    .heatmap-odds {
+        font-size: 0.62rem;
+    }
+
+    .form-select,
+    .form-control,
+    .btn {
+        min-height: 44px;
+    }
+}
+
+@media (max-width: 400px) {
+    .home-container {
+        padding-right: 0.6rem !important;
+        padding-left: 0.6rem !important;
+    }
+
+    .brand-title {
+        font-size: 1.4rem;
+    }
+
+    .analytics-card.p-4 {
+        padding: 0.85rem !important;
+    }
+}
+
+.pool-page {
+    width: min(100% - 2rem, 1250px);
+    margin: 0 auto;
+    padding: 2rem 0;
+}
+
+.pool-page__header,
+.pool-system-summary,
+.pool-tier-picker,
+.pool-coupon-tabs {
+    display: flex;
+    align-items: center;
+}
+
+.pool-page__header {
+    justify-content: space-between;
+    gap: 1rem;
+    margin-bottom: 1.25rem;
+}
+
+.pool-page__header h1 {
+    margin: 0;
+    color: #fff;
+    font-size: clamp(1.5rem, 4vw, 2.25rem);
+    font-weight: 800;
+}
+
+.pool-page__subtitle,
+.pool-eyebrow {
+    margin: 0.4rem 0 0;
+    color: var(--text-secondary);
+}
+
+.pool-eyebrow {
+    color: #ffd100;
+    font-size: 0.72rem;
+    font-weight: 800;
+    letter-spacing: 0.12em;
+}
+
+.pool-demo-badge,
+.pool-demo-notice {
+    color: #ffd100;
+    background: rgba(255, 209, 0, 0.1);
+    border: 1px solid rgba(255, 209, 0, 0.55);
+    border-radius: 0.75rem;
+    font-weight: 800;
+}
+
+.pool-demo-badge {
+    flex: 0 0 auto;
+    padding: 0.55rem 0.8rem;
+    font-size: 0.76rem;
+}
+
+.pool-live-badge,
+.pool-live-notice {
+    color: #34d399;
+    background: rgba(52, 211, 153, 0.1);
+    border-color: rgba(52, 211, 153, 0.55);
+}
+
+.pool-demo-notice {
+    margin-bottom: 1rem;
+    padding: 0.85rem 1rem;
+    font-size: 0.9rem;
+}
+
+.pool-card {
+    overflow: hidden;
+    border: 1px solid #334d70;
+    border-radius: 1rem;
+    background: #0b1f3a;
+    box-shadow: 0 16px 40px rgba(0, 0, 0, 0.25);
+}
+
+.pool-coupon-tabs {
+    gap: 0.5rem;
+    padding: 0.75rem 1rem 0;
+    border-bottom: 1px solid #334d70;
+}
+
+.pool-coupon-tab,
+.pool-tier-button {
+    color: #dbeafe;
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: 0.7rem;
+    font: inherit;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.pool-coupon-tab {
+    padding: 0.75rem 1rem;
+}
+
+.pool-coupon-tab.is-active {
+    color: #0b1f3a;
+    background: #ffd100;
+}
+
+.pool-system-summary {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 0.75rem;
+    padding: 1rem;
+}
+
+.pool-system-summary > div {
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+    padding: 0.75rem;
+    border: 1px solid #334d70;
+    border-radius: 0.7rem;
+    color: #fff;
+}
+
+.pool-summary-label {
+    color: #a9bdd6;
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+}
+
+.pool-cost {
+    color: #52e0a0;
+    font-size: 1.15rem;
+}
+
+.pool-tier-picker {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.65rem;
+    padding: 0 1rem 1rem;
+}
+
+.pool-tier-button {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 0.6rem;
+    min-height: 48px;
+    padding: 0.7rem 0.9rem;
+    border-color: #476182;
+}
+
+.pool-tier-button span {
+    color: #a9bdd6;
+    font-size: 0.78rem;
+}
+
+.pool-tier-button.is-active {
+    color: #0b1f3a;
+    background: #ffd100;
+    border-color: #ffd100;
+}
+
+.pool-tier-button.is-active span {
+    color: #26364c;
+}
+
+.pool-table-scroll {
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    -webkit-overflow-scrolling: touch;
+}
+
+.pool-table {
+    width: 100%;
+    min-width: 850px;
+    border-collapse: collapse;
+    background: #fff;
+    color: #12233b;
+}
+
+.pool-table th,
+.pool-table td {
+    padding: 0.7rem 0.8rem;
+    border: 1px solid #d7e0eb;
+    text-align: left;
+    vertical-align: middle;
+}
+
+.pool-table thead th {
+    color: #fff;
+    background: #17375e;
+    font-size: 0.75rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    white-space: nowrap;
+}
+
+.pool-table tbody tr:nth-child(even) {
+    background: #f1f5f9;
+}
+
+.pool-table tbody tr:hover {
+    background: #e7f8ef;
+}
+
+.pool-match-number {
+    width: 3.5rem;
+    color: #0b1f3a;
+    background: #e2e8f0;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 1rem;
+}
+
+.pool-teams,
+.pool-odds,
+.pool-probabilities {
+    white-space: nowrap;
+}
+
+.pool-teams {
+    font-weight: 700;
+}
+
+.pool-vs {
+    margin: 0 0.35rem;
+    color: #64748b;
+}
+
+.pool-odds,
+.pool-probabilities {
+    font-family: 'JetBrains Mono', monospace;
+    font-variant-numeric: tabular-nums;
+}
+
+.pool-odds span,
+.pool-probabilities span {
+    display: inline-block;
+    min-width: 2.8rem;
+    text-align: center;
+}
+
+.pool-probabilities span {
+    color: #087443;
+    font-weight: 800;
+}
+
+.pool-picks {
+    display: flex;
+    gap: 0.35rem;
+}
+
+.pool-pick {
+    position: relative;
+    cursor: default;
+}
+
+.pool-pick input {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    opacity: 0;
+}
+
+.pool-pick span {
+    display: grid;
+    width: 2rem;
+    height: 2rem;
+    place-items: center;
+    border: 1px solid #94a3b8;
+    border-radius: 0.35rem;
+    color: #334155;
+    background: #fff;
+    font-weight: 800;
+}
+
+.pool-pick.is-selected span {
+    color: #0b1f3a;
+    background: #ffd100;
+    border-color: #d1a900;
+    box-shadow: inset 0 0 0 1px rgba(11, 31, 58, 0.12);
+}
+
+.pool-card__footer {
+    padding: 0.9rem 1rem;
+    color: #bfd0e4;
+    font-size: 0.82rem;
+}
+
+.pool-empty-state {
+    padding: 2rem 1rem;
+    border: 1px dashed #476182;
+    border-radius: 1rem;
+    color: #dbeafe;
+    text-align: center;
+}
+
+@media (max-width: 767.98px) {
+    .pool-page {
+        width: 100%;
+        padding: 1rem 0.75rem;
+    }
+
+    .pool-page__header {
+        align-items: flex-start;
+        flex-direction: column;
+    }
+
+    .pool-system-summary {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .pool-tier-button {
+        flex-direction: column;
+        justify-content: center;
+        text-align: center;
+        padding: 0.6rem 0.3rem;
+    }
+
+    .mobile-filter-row input[type="date"],
+    .mobile-filter-row .btn {
+        width: 100%;
+    }
+}

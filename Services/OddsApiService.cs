@@ -3,7 +3,7 @@ using OddsAnalytics.Models;
 
 namespace OddsAnalytics.Services;
 
-public class OddsApiService
+public class OddsApiService : IUpcomingMatchRepository
 {
     private readonly HttpClient _http;
 
@@ -12,11 +12,69 @@ public class OddsApiService
         _http = http;
     }
 
+    public async Task<DataResult<IReadOnlyList<MatchOdds>>> GetUpcomingMatchesAsync(
+        LeagueDefinition league,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(league.OddsApiSportKey))
+            return DataResult<IReadOnlyList<MatchOdds>>.Unavailable($"No odds feed is configured for {league.DisplayName}.");
+
+        try
+        {
+            var sportKey = Uri.EscapeDataString(league.OddsApiSportKey);
+            var response = await _http.GetAsync(
+                $"odds/{sportKey}",
+                cancellationToken);
+            if (!response.IsSuccessStatusCode)
+                return DataResult<IReadOnlyList<MatchOdds>>.Unavailable($"The odds feed returned HTTP {(int)response.StatusCode}.");
+
+            var data = await response.Content.ReadFromJsonAsync<List<OddsApiResponse>>(cancellationToken: cancellationToken);
+            var matches = new List<MatchOdds>();
+
+            foreach (var match in data ?? [])
+            {
+                var bookmaker = match.Bookmakers.FirstOrDefault();
+                var market = bookmaker?.Markets.FirstOrDefault(item => item.Key == "h2h");
+                if (bookmaker is null || market is null)
+                    continue;
+
+                var home = market.Outcomes.FirstOrDefault(item => item.Name.Equals(match.HomeTeam, StringComparison.OrdinalIgnoreCase));
+                var away = market.Outcomes.FirstOrDefault(item => item.Name.Equals(match.AwayTeam, StringComparison.OrdinalIgnoreCase));
+                var draw = market.Outcomes.FirstOrDefault(item =>
+                    item.Name.Equals("Draw", StringComparison.OrdinalIgnoreCase)
+                    || item.Name.Equals("X", StringComparison.OrdinalIgnoreCase));
+
+                if (home is null || away is null || home.Price <= 1 || away.Price <= 1)
+                    continue;
+
+                matches.Add(new MatchOdds(
+                    match.Id,
+                    match.HomeTeam,
+                    match.AwayTeam,
+                    match.CommenceTime,
+                    bookmaker.Title,
+                    home.Price,
+                    draw?.Price > 1 ? draw.Price : null,
+                    away.Price));
+            }
+
+            return DataResult<IReadOnlyList<MatchOdds>>.Live(matches);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception exception)
+        {
+            return DataResult<IReadOnlyList<MatchOdds>>.Unavailable($"Odds could not be loaded: {exception.Message}");
+        }
+    }
+
     public async Task<List<ExtractedMatchOdds>> FetchUpcomingOddsAsync(string sportKey)
     {
         try
         {
-            var url = $"https://football-proxy.robinwetterstrom.workers.dev/odds/{Uri.EscapeDataString(sportKey)}";
+            var url = $"odds/{Uri.EscapeDataString(sportKey)}";
             var matches = await _http.GetFromJsonAsync<List<OddsApiResponse>>(url);
 
             if (matches == null || matches.Count == 0)

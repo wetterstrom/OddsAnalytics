@@ -1,0 +1,155 @@
+@page "/pool-system"
+@inject PoolCouponViewModel ViewModel
+@using OddsAnalytics.Models
+@using OddsAnalytics.Services
+
+<PageTitle>Veckans Stryktips &amp; Europatips</PageTitle>
+
+<div class="pool-page">
+    <header class="pool-page__header">
+        <div>
+            <p class="pool-eyebrow">ODDSANALYTICS • SYSTEMBYGGARE</p>
+            <h1>Veckans Bästa Stryktips &amp; Europatipset</h1>
+            <p class="pool-page__subtitle">Jämför 1X2-modellens sannolikheter och bygg ett reducerat system.</p>
+        </div>
+        <span class="pool-demo-badge @(ViewModel.CurrentCoupon is { IsDemo: false } ? "pool-live-badge" : "")">
+            @(ViewModel.CurrentCoupon is { IsDemo: false } ? "LIVE DATA" : "DEMOOMGÅNG")
+        </span>
+    </header>
+
+    <div class="pool-demo-notice @(ViewModel.CurrentCoupon is { IsDemo: false } ? "pool-live-notice" : "")" role="status">@ViewModel.StatusMessage</div>
+
+    @if (ViewModel.IsLoading)
+    {
+        <div class="pool-empty-state">Laddar kuponger…</div>
+    }
+    else if (ViewModel.CurrentCoupon is { } coupon && ViewModel.System is { } system)
+    {
+        <section class="pool-card" aria-label="Kupong och systemval">
+            <div class="pool-coupon-tabs" role="tablist" aria-label="Välj kupongtyp">
+                <button type="button"
+                        class="pool-coupon-tab @(ViewModel.SelectedType == PoolCouponType.Stryktips ? "is-active" : "")"
+                        role="tab"
+                        aria-selected="@(ViewModel.SelectedType == PoolCouponType.Stryktips)"
+                        @onclick="() => ViewModel.SelectCoupon(PoolCouponType.Stryktips)">
+                    Stryktips
+                </button>
+                <button type="button"
+                        class="pool-coupon-tab @(ViewModel.SelectedType == PoolCouponType.Europatips ? "is-active" : "")"
+                        role="tab"
+                        aria-selected="@(ViewModel.SelectedType == PoolCouponType.Europatips)"
+                        @onclick="() => ViewModel.SelectCoupon(PoolCouponType.Europatips)">
+                    Europatipset
+                </button>
+            </div>
+
+            <div class="pool-system-summary">
+                <div>
+                    <span class="pool-summary-label">Kupongdatum</span>
+                    <strong>@coupon.MatchDate.ToString("yyyy-MM-dd")</strong>
+                </div>
+                <div>
+                    <span class="pool-summary-label">System</span>
+                    <strong>@system.RowCount rader</strong>
+                </div>
+                <div>
+                    <span class="pool-summary-label">Insats</span>
+                    <strong class="pool-cost">@system.CostKr kr</strong>
+                </div>
+                <div>
+                    <span class="pool-summary-label">Dubblar</span>
+                    <strong>@system.Selections.Count(selection => selection.Outcomes.Count == 2)</strong>
+                </div>
+            </div>
+
+            <div class="pool-tier-picker" aria-label="Välj systemstorlek">
+                @foreach (var tier in AvailableTiers)
+                {
+                    <button type="button"
+                            class="pool-tier-button @(ViewModel.SelectedTier == tier ? "is-active" : "")"
+                            aria-pressed="@(ViewModel.SelectedTier == tier)"
+                            @onclick="() => ViewModel.SelectTier(tier)">
+                        <strong>@((int)tier) kr</strong>
+                        <span>@(Math.Log2((int)tier)) dubblar</span>
+                    </button>
+                }
+            </div>
+
+            <div class="pool-table-scroll">
+                <table class="pool-table">
+                    <thead>
+                        <tr>
+                            <th scope="col">Nr</th>
+                            <th scope="col">Match</th>
+                            <th scope="col">Odds 1 / X / 2</th>
+                            <th scope="col">Modell 1 / X / 2</th>
+                            <th scope="col">Valt system</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var selection in system.Selections)
+                        {
+                            var match = coupon.Matches.First(item => item.Id == selection.MatchId);
+                            <tr>
+                                <th scope="row" class="pool-match-number">@selection.MatchNumber.ToString("00")</th>
+                                <td class="pool-teams">
+                                    <span>@selection.HomeTeam</span>
+                                    <span class="pool-vs">–</span>
+                                    <span>@selection.AwayTeam</span>
+                                </td>
+                                <td class="pool-odds">
+                                    <span>@match.OddsHome.ToString("F2")</span>
+                                    <span>@match.OddsDraw.ToString("F2")</span>
+                                    <span>@match.OddsAway.ToString("F2")</span>
+                                </td>
+                                <td class="pool-probabilities">
+                                    <span>@((match.ProbabilityHome * 100).ToString("F0"))%</span>
+                                    <span>@((match.ProbabilityDraw * 100).ToString("F0"))%</span>
+                                    <span>@((match.ProbabilityAway * 100).ToString("F0"))%</span>
+                                </td>
+                                <td>
+                                    <div class="pool-picks" aria-label="Valda tecken match @selection.MatchNumber">
+                                        @foreach (var outcome in AvailableOutcomes)
+                                        {
+                                            var isSelected = selection.Outcomes.Contains(outcome);
+                                            <label class="pool-pick @(isSelected ? "is-selected" : "")">
+                                                <input type="checkbox" checked="@isSelected" disabled aria-label="@OutcomeLabel(outcome)" />
+                                                <span>@OutcomeLabel(outcome)</span>
+                                            </label>
+                                        }
+                                    </div>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+
+            <footer class="pool-card__footer">
+                Systemet täcker @system.Selections.Count(selection => selection.Outcomes.Count == 2) matcher med dubbeltecken. Singlarna väljer modellens mest sannolika utfall.
+            </footer>
+        </section>
+    }
+    else
+    {
+        <div class="pool-empty-state">@ViewModel.StatusMessage</div>
+    }
+</div>
+
+@code {
+    private static readonly CouponSystemTier[] AvailableTiers =
+    [CouponSystemTier.Kr32, CouponSystemTier.Kr64, CouponSystemTier.Kr128];
+
+    private static readonly MatchOutcome[] AvailableOutcomes =
+    [MatchOutcome.Home, MatchOutcome.Draw, MatchOutcome.Away];
+
+    protected override Task OnInitializedAsync() => ViewModel.InitializeAsync();
+
+    private static string OutcomeLabel(MatchOutcome outcome) => outcome switch
+    {
+        MatchOutcome.Home => "1",
+        MatchOutcome.Draw => "X",
+        MatchOutcome.Away => "2",
+        _ => string.Empty
+    };
+}

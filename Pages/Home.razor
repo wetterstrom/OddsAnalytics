@@ -1,13 +1,14 @@
 ﻿@page "/"
-@inject OddsAnalytics.Services.OddsApiService OddsService
-@inject OddsAnalytics.Services.FootballStatsService StatsService
 @inject OddsAnalytics.Services.MatchAnalyzerService MatchAnalyzer
+@inject OddsAnalytics.Services.DailyBestBetsViewModel DailyBetsViewModel
+@inject OddsAnalytics.Services.IUpcomingMatchRepository MatchRepository
+@inject OddsAnalytics.Services.ILeagueStatisticsRepository StatisticsRepository
 @using OddsAnalytics.Models
 @using OddsAnalytics.Services
 
 <PageTitle>OddsAnalytics Pro</PageTitle>
 
-<div class="container py-4" style="max-width: 1250px;">
+<div class="container home-container py-4" style="max-width: 1250px;">
     <!-- Top Brand Header -->
     <div class="d-flex flex-column flex-md-row justify-content-between align-items-center mb-4 pb-3 border-bottom" style="border-color: var(--border-card) !important;">
         <div>
@@ -16,10 +17,10 @@
         </div>
         <div class="d-flex align-items-center gap-2 mt-3 mt-md-0">
             <span class="badge" style="background:#0f172a; color:#38bdf8; border:1px solid #334155; padding: 8px 14px; font-size: 0.82rem;">
-                🟢 API-Football Live
+                @(currentDataIsDemo ? "🟡 Demo data" : "☁️ Cloudflare Worker")
             </span>
             <span class="badge" style="background:#0f172a; color:#34d399; border:1px solid #334155; padding: 8px 14px; font-size: 0.82rem;">
-                🟢 The Odds API Live
+                @(currentConfig.Sport == SportCategory.IceHockey ? "🏒 Overtime-inclusive" : "⚽ Football 1X2")
             </span>
         </div>
     </div>
@@ -30,12 +31,12 @@
             <div class="col-md-4">
                 <label class="form-label mb-1">VALD LIGA</label>
                 <select class="form-select form-select-sm" @bind="selectedLeagueKey" @bind:after="OnLeagueChanged">
-                    @foreach (var group in FootballLeagueRepository.AllLeagues.GroupBy(l => l.Country))
+                    @foreach (var group in LeagueCatalog.AllLeagues.GroupBy(l => l.Country))
                     {
                         <optgroup label="@group.Key">
                             @foreach (var league in group)
                             {
-                                <option value="@league.Key">@league.DisplayName</option>
+                                <option value="@league.Key">@(league.Sport == SportCategory.IceHockey ? "🏒" : "⚽") @league.DisplayName</option>
                             }
                         </optgroup>
                     }
@@ -46,6 +47,7 @@
                 <div class="small pt-1 text-white">
                     Hämtat <strong>@currentTeams.Count lag</strong> | <strong>@upcomingMatches.Count matcher</strong> i omgången | <span class="badge bg-success text-white px-2 py-1">@allScannedValueBets.Count st +EV spel</span>
                 </div>
+                <div class="small pt-1 @(currentDataIsDemo ? "text-warning" : "text-secondary")">@currentDataStatus</div>
             </div>
             <div class="col-md-3 d-flex align-items-end">
                 <button class="btn btn-sm btn-primary w-100 fw-bold py-2" @onclick="ReloadAllData" disabled="@isLoading">
@@ -56,7 +58,7 @@
     </div>
 
     <!-- Fliknavigering -->
-    <ul class="nav nav-pills nav-pills-custom mb-4 nav-fill">
+    <ul class="nav nav-pills nav-pills-custom home-tabs mb-4 nav-fill">
         <li class="nav-item">
             <button class="nav-link @(activeTab == "today" ? "active" : "")" @onclick='() => activeTab = "today"'>
                 📅 Dagens Bästa (+EV) 
@@ -82,14 +84,19 @@
         <div class="analytics-card p-4">
             <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3 mb-4">
                 <div>
-                    <h5 class="fw-bold mb-1 text-white">🔥 Dagens Bästa Värdespel (Alla Ligor)</h5>
+                        <h5 class="fw-bold mb-1 text-white">🔥 Bästa Värdespel för vald dag</h5>
                     <p class="small mb-0" style="color: var(--text-secondary);">
-                        Avspark <strong>idag (@DateTime.Now.ToString("dd MMMM"))</strong> över samtliga 14 ligor inkl. 1X2, Dubbelchans & Draw No Bet.
+                        Avspark <strong>@DailyBetsViewModel.SelectedDate.ToString("dd MMMM")</strong> över tillgängliga ligor.
                     </p>
                 </div>
-                <div class="d-flex align-items-center gap-2">
+                <div class="d-flex align-items-center gap-2 mobile-filter-row">
+                    <input type="date"
+                           class="form-control form-control-sm"
+                           aria-label="Välj datum för dagens bästa spel"
+                           value="@DailyBetsViewModel.SelectedDate.ToString("yyyy-MM-dd")"
+                           @onchange="OnDailyDateChanged" />
                     <button class="btn btn-sm btn-glow px-3 py-2" @onclick="ScanAllLeaguesForToday" disabled="@isScanningAll">
-                        @(isScanningAll ? scanProgressText : "⚡ Scanna Alla 14 Ligor")
+                        @(isScanningAll ? scanProgressText : "⚡ Scanna Alla Ligor")
                     </button>
                     <select class="form-select form-select-sm" style="width: auto;" @bind="marketTypeFilter" @bind:after="ApplyFilterToday">
                         <option value="all">Alla Marknader</option>
@@ -104,6 +111,9 @@
                         <option value="10">+10% EV</option>
                     </select>
                 </div>
+            </div>
+            <div class="small mb-3 @(DailyBetsViewModel.Availability == DataAvailability.Demo ? "text-warning" : "text-secondary")">
+                @DailyBetsViewModel.StatusMessage
             </div>
 
             @if (filteredTodayBets.Count > 0)
@@ -327,22 +337,25 @@
 
                     <h6 class="fw-bold mb-2 text-white">🎲 Spelbolagets Odds (@selectedMatch?.BookmakerName)</h6>
                     <div class="row g-2 mb-3">
-                        <div class="col-4">
+                        <div class="@(currentConfig.Sport == SportCategory.Football ? "col-4" : "col-6")">
                             <label class="form-label">1 (@homeTeam)</label>
                             <input type="number" step="0.05" class="form-control" @bind="marketOdds1" @bind:after="RecalculateSingle" />
                         </div>
-                        <div class="col-4">
-                            <label class="form-label">X (Kryss)</label>
-                            <input type="number" step="0.05" class="form-control" @bind="marketOddsX" @bind:after="RecalculateSingle" />
-                        </div>
-                        <div class="col-4">
+                        @if (currentConfig.Sport == SportCategory.Football)
+                        {
+                            <div class="col-4">
+                                <label class="form-label">X (Kryss)</label>
+                                <input type="number" step="0.05" class="form-control" @bind="marketOddsX" @bind:after="RecalculateSingle" />
+                            </div>
+                        }
+                        <div class="@(currentConfig.Sport == SportCategory.Football ? "col-4" : "col-6")">
                             <label class="form-label">2 (@awayTeam)</label>
                             <input type="number" step="0.05" class="form-control" @bind="marketOdds2" @bind:after="RecalculateSingle" />
                         </div>
                     </div>
 
                     <div>
-                        <label class="form-label">Över 2.5 Mål Odds</label>
+                        <label class="form-label">Över @(currentConfig.Sport == SportCategory.IceHockey ? "5.5" : "2.5") Mål Odds</label>
                         <input type="number" step="0.05" class="form-control" @bind="marketOddsOver25" @bind:after="RecalculateSingle" />
                     </div>
                 </div>
@@ -431,32 +444,34 @@
                 </div>
             </div>
 
-            <div class="heatmap-grid mb-2">
-                <div></div>
-                @for (int away = 0; away < scoreMatrix.GetLength(1); away++)
-                {
-                    <div class="heatmap-header">@away (@awayTeam)</div>
-                }
-
-                @for (int home = 0; home < scoreMatrix.GetLength(0); home++)
-                {
-                    int h = home;
-                    <div class="heatmap-row-label">@h (@homeTeam)</div>
-
+            <div class="heatmap-scroll mb-2">
+                <div class="heatmap-grid">
+                    <div></div>
                     @for (int away = 0; away < scoreMatrix.GetLength(1); away++)
                     {
-                        int a = away;
-                        double p = scoreMatrix[h, a];
-                        double fairOdds = p > 0 ? Math.Round(1.0 / p, 1) : 0;
-                        bool isTop = (h == topHomeGoals && a == topAwayGoals);
-                        double intensity = Math.Min(1.0, p * 7.5);
-
-                        <div class="heatmap-cell @(isTop ? "top-pick" : "")" style="@GetHeatmapCellStyle(intensity)">
-                            <span class="heatmap-prob">@((p * 100).ToString("F1"))%</span>
-                            <span class="heatmap-odds">Odds: @fairOdds</span>
-                        </div>
+                        <div class="heatmap-header">@away (@awayTeam)</div>
                     }
-                }
+
+                    @for (int home = 0; home < scoreMatrix.GetLength(0); home++)
+                    {
+                        int h = home;
+                        <div class="heatmap-row-label">@h (@homeTeam)</div>
+
+                        @for (int away = 0; away < scoreMatrix.GetLength(1); away++)
+                        {
+                            int a = away;
+                            double p = scoreMatrix[h, a];
+                            double fairOdds = p > 0 ? Math.Round(1.0 / p, 1) : 0;
+                            bool isTop = (h == topHomeGoals && a == topAwayGoals);
+                            double intensity = Math.Min(1.0, p * 7.5);
+
+                            <div class="heatmap-cell @(isTop ? "top-pick" : "")" style="@GetHeatmapCellStyle(intensity)">
+                                <span class="heatmap-prob">@((p * 100).ToString("F1"))%</span>
+                                <span class="heatmap-odds">Odds: @fairOdds</span>
+                            </div>
+                        }
+                    }
+                </div>
             </div>
             <div class="small text-center mt-3" style="color: var(--text-secondary);">
                 Jämför dessa odds direkt med marknaden för "Korrekt Resultat" (Correct Score).
@@ -467,7 +482,7 @@
 
 @code {
     private string selectedLeagueKey = "epl";
-    private FootballLeagueConfig currentConfig => FootballLeagueRepository.AllLeagues.FirstOrDefault(l => l.Key == selectedLeagueKey) ?? FootballLeagueRepository.AllLeagues[0];
+    private LeagueDefinition currentConfig => LeagueCatalog.AllLeagues.FirstOrDefault(l => l.Key == selectedLeagueKey) ?? LeagueCatalog.AllLeagues[0];
 
     private string activeTab = "today";
     private bool isLoading = false;
@@ -476,6 +491,8 @@
     private double minEvFilter = 0;
     private double minEvFilterToday = 0;
     private string marketTypeFilter = "all";
+    private string currentDataStatus = "No league data loaded.";
+    private bool currentDataIsDemo;
 
     private List<Team> currentTeams = new();
     private List<ExtractedMatchOdds> upcomingMatches = new();
@@ -511,7 +528,7 @@
     protected override async Task OnInitializedAsync()
     {
         await ReloadAllData();
-        _ = ScanAllLeaguesForToday();
+        //= ScanAllLeaguesForToday();
     }
 
     private async Task OnLeagueChanged()
@@ -525,16 +542,30 @@
 
         try
         {
-            currentTeams = await StatsService.FetchLeagueStatsAsync(currentConfig.ApiFootballId, currentConfig.DisplayName, currentConfig.Season);
-        }
-        catch
-        {
-            currentTeams = new();
-        }
+            var teamsTask = StatisticsRepository.GetTeamsAsync(currentConfig);
+            var matchesTask = MatchRepository.GetUpcomingMatchesAsync(currentConfig);
+            await Task.WhenAll(teamsTask, matchesTask);
 
-        try
-        {
-            upcomingMatches = await OddsService.FetchUpcomingOddsAsync(currentConfig.OddsApiSportKey);
+            var teamsResult = await teamsTask;
+            var matchesResult = await matchesTask;
+            currentTeams = teamsResult.Data?.ToList() ?? [];
+            upcomingMatches = matchesResult.Data?.Select(match => new ExtractedMatchOdds(
+                match.Id,
+                match.HomeTeam,
+                match.AwayTeam,
+                match.Kickoff,
+                match.BookmakerName,
+                match.OddsHome,
+                match.OddsDraw ?? 0,
+                match.OddsAway)).ToList() ?? [];
+
+            currentDataIsDemo = teamsResult.Availability == DataAvailability.Demo
+                || matchesResult.Availability == DataAvailability.Demo;
+            currentDataStatus = currentDataIsDemo
+                ? $"DEMO DATA — simulated feed for {currentConfig.DisplayName}."
+                : !teamsResult.IsAvailable || !matchesResult.IsAvailable
+                    ? $"Live data unavailable for {currentConfig.DisplayName}."
+                    : $"Live data loaded for {currentConfig.DisplayName}.";
 
             RunRoundScanner();
 
@@ -543,10 +574,28 @@
                 selectedMatchId = upcomingMatches[0].MatchId;
                 ApplyMatch(upcomingMatches[0]);
             }
+            else
+            {
+                selectedMatch = null;
+                selectedMatchId = "";
+                homeTeam = "";
+                awayTeam = "";
+                RecalculateSingle();
+            }
         }
-        catch { }
-
-        isLoading = false;
+        catch
+        {
+            currentTeams = new();
+            upcomingMatches = new();
+            allScannedValueBets = new();
+            filteredValueBets = new();
+            currentDataStatus = $"Data unavailable for {currentConfig.DisplayName}.";
+            currentDataIsDemo = false;
+        }
+        finally
+        {
+            isLoading = false;
+        }
     }
 
     private void RunRoundScanner()
@@ -564,38 +613,31 @@
 
     private async Task ScanAllLeaguesForToday()
     {
-        if (isScanningAll) return;
         isScanningAll = true;
-
-        var allToday = new List<ScannedValueBet>();
-        var today = DateTime.Today;
-
-        int index = 0;
-        foreach (var league in FootballLeagueRepository.AllLeagues)
-        {
-            index++;
-            scanProgressText = $"Scannar {index}/{FootballLeagueRepository.AllLeagues.Count} ({league.DisplayName})...";
-            StateHasChanged();
-
-            try
-            {
-                var teams = await StatsService.FetchLeagueStatsAsync(league.ApiFootballId, league.DisplayName, league.Season);
-                var matches = await OddsService.FetchUpcomingOddsAsync(league.OddsApiSportKey);
-
-                foreach (var match in matches)
-                {
-                    if (match.Kickoff.ToLocalTime().Date != today) continue;
-                    EvaluateAndAddAllMarkets(allToday, match, teams, league.Key, league.DisplayName);
-                }
-            }
-            catch { }
-        }
-
-        todaysValueBets = allToday.OrderByDescending(b => b.ExpectedValue).ToList();
-        ApplyFilterToday();
-
-        isScanningAll = false;
+        scanProgressText = $"Scannar {DailyBetsViewModel.SelectedDate:yyyy-MM-dd}...";
         StateHasChanged();
+
+        try
+        {
+            await DailyBetsViewModel.LoadAsync(DailyBetsViewModel.SelectedDate);
+            todaysValueBets = DailyBetsViewModel.Bets.ToList();
+            ApplyFilterToday();
+        }
+        finally
+        {
+            isScanningAll = DailyBetsViewModel.IsLoading;
+            scanProgressText = "";
+            StateHasChanged();
+        }
+    }
+
+    private async Task OnDailyDateChanged(ChangeEventArgs args)
+    {
+        if (DateOnly.TryParse(args.Value?.ToString(), out var selectedDate))
+        {
+            DailyBetsViewModel.SelectedDate = selectedDate;
+            await ScanAllLeaguesForToday();
+        }
     }
 
     private void EvaluateAndAddAllMarkets(List<ScannedValueBet> list, ExtractedMatchOdds match, List<Team> teams, string leagueKey, string leagueName)
@@ -605,26 +647,30 @@
 
         var p = analysis.Probabilities;
 
-        // 1X2
         CheckAndAddValueBet(list, match, $"1 ({match.HomeTeam})", p.HomeProb, match.OddsHome, leagueKey, leagueName);
-        CheckAndAddValueBet(list, match, "X (Kryss)", p.DrawProb, match.OddsDraw, leagueKey, leagueName);
         CheckAndAddValueBet(list, match, $"2 ({match.AwayTeam})", p.AwayProb, match.OddsAway, leagueKey, leagueName);
 
-        // Dubbelchans (1X & X2)
-        double synth1X = PoissonEngine.CalculateSyntheticDoubleChanceOdds(match.OddsHome, match.OddsDraw);
-        double synthX2 = PoissonEngine.CalculateSyntheticDoubleChanceOdds(match.OddsAway, match.OddsDraw);
-        CheckAndAddValueBet(list, match, "1X (Dubbelchans)", p.DoubleChance1XProb, synth1X, leagueKey, leagueName);
-        CheckAndAddValueBet(list, match, "X2 (Dubbelchans)", p.DoubleChanceX2Prob, synthX2, leagueKey, leagueName);
+        if (match.OddsDraw > 1 && p.DrawProb > 0)
+        {
+            CheckAndAddValueBet(list, match, "X (Kryss)", p.DrawProb, match.OddsDraw, leagueKey, leagueName);
 
-        // Draw No Bet (DNB 1 & DNB 2)
-        double synthDnb1 = PoissonEngine.CalculateSyntheticDnbOdds(match.OddsHome, match.OddsDraw);
-        double synthDnb2 = PoissonEngine.CalculateSyntheticDnbOdds(match.OddsAway, match.OddsDraw);
-        CheckAndAddValueBet(list, match, $"DNB 1 ({match.HomeTeam})", p.DnbHomeProb, synthDnb1, leagueKey, leagueName);
-        CheckAndAddValueBet(list, match, $"DNB 2 ({match.AwayTeam})", p.DnbAwayProb, synthDnb2, leagueKey, leagueName);
+            double synth1X = PoissonEngine.CalculateSyntheticDoubleChanceOdds(match.OddsHome, match.OddsDraw);
+            double synthX2 = PoissonEngine.CalculateSyntheticDoubleChanceOdds(match.OddsAway, match.OddsDraw);
+            CheckAndAddValueBet(list, match, "1X (Dubbelchans)", p.DoubleChance1XProb, synth1X, leagueKey, leagueName);
+            CheckAndAddValueBet(list, match, "X2 (Dubbelchans)", p.DoubleChanceX2Prob, synthX2, leagueKey, leagueName);
+
+            double synthDnb1 = PoissonEngine.CalculateSyntheticDnbOdds(match.OddsHome, match.OddsDraw);
+            double synthDnb2 = PoissonEngine.CalculateSyntheticDnbOdds(match.OddsAway, match.OddsDraw);
+            CheckAndAddValueBet(list, match, $"DNB 1 ({match.HomeTeam})", p.DnbHomeProb, synthDnb1, leagueKey, leagueName);
+            CheckAndAddValueBet(list, match, $"DNB 2 ({match.AwayTeam})", p.DnbAwayProb, synthDnb2, leagueKey, leagueName);
+        }
     }
 
     private void CheckAndAddValueBet(List<ScannedValueBet> list, ExtractedMatchOdds match, string outcome, double trueProb, double bookmakerOdds, string leagueKey, string leagueName)
     {
+        if (trueProb <= 0 || bookmakerOdds <= 1)
+            return;
+
         var eval = PoissonEngine.EvaluateBet(outcome, trueProb, bookmakerOdds);
         if (eval.ExpectedValue > 0)
         {
@@ -782,7 +828,8 @@
         double awayGoalsAvg = teams.Average(team => team.AwayGoalsScoredAvg);
         if (homeGoalsAvg <= 0 || awayGoalsAvg <= 0) return (home, away, null, null);
 
-        var config = new LeagueConfig(leagueKey, leagueName, SportCategory.Football, homeGoalsAvg, awayGoalsAvg);
+        var sport = LeagueCatalog.AllLeagues.FirstOrDefault(league => league.Key == leagueKey)?.Sport ?? SportCategory.Football;
+        var config = new LeagueConfig(leagueKey, leagueName, sport, homeGoalsAvg, awayGoalsAvg);
         return (home, away, config, MatchAnalyzer.Analyze(home, away, config));
     }
 
@@ -802,22 +849,28 @@
             return;
         }
 
-        double synth1X = PoissonEngine.CalculateSyntheticDoubleChanceOdds(marketOdds1, marketOddsX);
-        double synthX2 = PoissonEngine.CalculateSyntheticDoubleChanceOdds(marketOdds2, marketOddsX);
-        double synthDnb1 = PoissonEngine.CalculateSyntheticDnbOdds(marketOdds1, marketOddsX);
-        double synthDnb2 = PoissonEngine.CalculateSyntheticDnbOdds(marketOdds2, marketOddsX);
-
-        evaluationResults = new List<ValueBetResult>
+        var results = new List<ValueBetResult>
         {
-            PoissonEngine.EvaluateBet($"1 ({homeTeam})", probs.HomeProb, marketOdds1),
-            PoissonEngine.EvaluateBet("X (Oavgjort)", probs.DrawProb, marketOddsX),
-            PoissonEngine.EvaluateBet($"2 ({awayTeam})", probs.AwayProb, marketOdds2),
-            PoissonEngine.EvaluateBet("1X (Dubbelchans)", probs.DoubleChance1XProb, synth1X),
-            PoissonEngine.EvaluateBet("X2 (Dubbelchans)", probs.DoubleChanceX2Prob, synthX2),
-            PoissonEngine.EvaluateBet($"DNB 1 ({homeTeam})", probs.DnbHomeProb, synthDnb1),
-            PoissonEngine.EvaluateBet($"DNB 2 ({awayTeam})", probs.DnbAwayProb, synthDnb2),
-            PoissonEngine.EvaluateBet("Över 2.5 Mål", probs.Over25Prob, marketOddsOver25)
+            PoissonEngine.EvaluateBet($"1 ({homeTeam})", probs.HomeProb, marketOdds1)
         };
+
+        if (currentConfig.Sport == SportCategory.Football && marketOddsX > 1)
+        {
+            double synth1X = PoissonEngine.CalculateSyntheticDoubleChanceOdds(marketOdds1, marketOddsX);
+            double synthX2 = PoissonEngine.CalculateSyntheticDoubleChanceOdds(marketOdds2, marketOddsX);
+            double synthDnb1 = PoissonEngine.CalculateSyntheticDnbOdds(marketOdds1, marketOddsX);
+            double synthDnb2 = PoissonEngine.CalculateSyntheticDnbOdds(marketOdds2, marketOddsX);
+
+            results.Add(PoissonEngine.EvaluateBet("X (Oavgjort)", probs.DrawProb, marketOddsX));
+            results.Add(PoissonEngine.EvaluateBet("1X (Dubbelchans)", probs.DoubleChance1XProb, synth1X));
+            results.Add(PoissonEngine.EvaluateBet("X2 (Dubbelchans)", probs.DoubleChanceX2Prob, synthX2));
+            results.Add(PoissonEngine.EvaluateBet($"DNB 1 ({homeTeam})", probs.DnbHomeProb, synthDnb1));
+            results.Add(PoissonEngine.EvaluateBet($"DNB 2 ({awayTeam})", probs.DnbAwayProb, synthDnb2));
+        }
+
+        results.Add(PoissonEngine.EvaluateBet($"2 ({awayTeam})", probs.AwayProb, marketOdds2));
+        results.Add(PoissonEngine.EvaluateBet($"Över {probs.OverUnderLine:F1} Mål", probs.Over25Prob, marketOddsOver25));
+        evaluationResults = results;
 
         scoreMatrix = MatchAnalyzer.GenerateScoreMatrix(analysis.HomeTeam, analysis.AwayTeam, analysis.Config);
 

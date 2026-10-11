@@ -1,0 +1,6 @@
+name = "football-proxy"
+main = "src/index.js"
+compatibility_date = "2025-03-01"
+
+[vars]
+ALLOWED_ORIGINS = "http://localhost:5263,https://localhost:7044"

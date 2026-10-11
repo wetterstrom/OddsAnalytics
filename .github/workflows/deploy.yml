@@ -22,7 +22,7 @@ jobs:
 
       - name: Publish Blazor WASM
         run: |
-          dotnet publish OddsAnalytics.csproj -c Release -o release -p:BlazorEnableCompression=false -p:WasmFingerprintAssets=false
+          dotnet publish OddsAnalytics.csproj -c Release -o release -p:BlazorEnableCompression=false
 
       - name: Setup GitHub Pages files
         run: |
