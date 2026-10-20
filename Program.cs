@@ -17,12 +17,28 @@ namespace OddsAnalytics
             builder.RootComponents.Add<HeadOutlet>("head::after");
 
             var useDevelopmentMocks = builder.HostEnvironment.IsDevelopment();
-            var workerBaseUrl = builder.Configuration["Cloudflare:WorkerBaseUrl"];
-            if (!Uri.TryCreate(workerBaseUrl, UriKind.Absolute, out var workerUri)
-                || workerUri.Scheme != Uri.UriSchemeHttps)
-                throw new InvalidOperationException("Cloudflare:WorkerBaseUrl must be a valid HTTPS URL.");
+            // Läs från appsettings, men fall tillbaka på din Cloudflare Worker om GitHub Pages missar json-filen
+            var configuredWorkerUrl = builder.Configuration["Cloudflare:WorkerBaseUrl"];
 
-            builder.Services.AddScoped(_ => new HttpClient { BaseAddress = workerUri });
+            Uri workerBaseUri;
+
+            if (!string.IsNullOrWhiteSpace(configuredWorkerUrl) &&
+                Uri.TryCreate(configuredWorkerUrl, UriKind.Absolute, out var parsedWorkerUri))
+            {
+                workerBaseUri = parsedWorkerUri;
+            }
+            else
+            {
+                workerBaseUri = new Uri(
+                    "https://football-proxy.robinwetterstrom.workers.dev/",
+                    UriKind.Absolute);
+            }
+
+            builder.Services.AddScoped(_ => new HttpClient
+            {
+                BaseAddress = workerBaseUri
+            });
+
             builder.Services.AddScoped<IDemoSportsDataFactory, DemoSportsDataFactory>();
             builder.Services.AddScoped<OddsApiService>();
             builder.Services.AddScoped<FootballStatsService>();
