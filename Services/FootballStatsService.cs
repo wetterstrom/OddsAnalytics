@@ -1,4 +1,4 @@
-﻿using System.Net.Http.Json;
+﻿using System.Text.Json;
 using OddsAnalytics.Models;
 
 namespace OddsAnalytics.Services;
@@ -17,10 +17,9 @@ public class FootballStatsService : ILeagueStatisticsRepository
         LeagueDefinition league,
         CancellationToken cancellationToken = default)
     {
-        // 1. Kontrollera om ligan saknar ID eller redan finns i cachen
         if (league.ApiFootballId is not int leagueId)
         {
-            return DataResult<IReadOnlyList<Team>>.Live(GetFallbackTeams(league.DisplayName));
+            return CreateFallbackResult(league.DisplayName, $"No API-Football league ID is configured for {league.DisplayName}.");
         }
 
         if (StandingsCache.TryGetValue(leagueId, out var cachedTeams))
@@ -30,45 +29,47 @@ public class FootballStatsService : ILeagueStatisticsRepository
 
         try
         {
-            // 2. Skicka endast 1 anrop för den aktuella ligan
-            using var response = await _http.GetAsync(
-                $"standings?league={leagueId}&season={league.Season}",
-                cancellationToken);
+            var requestUri = $"standings?league={leagueId}&season={league.Season}";
+            Console.WriteLine($"[FootballStats] GET {_http.BaseAddress}{requestUri}");
+            using var response = await _http.GetAsync(requestUri, cancellationToken);
+            var rawJson = await response.Content.ReadAsStringAsync(cancellationToken);
+            Console.WriteLine($"[FootballStats] HTTP {(int)response.StatusCode} {response.StatusCode}; response: {rawJson}");
 
-            if (response.IsSuccessStatusCode)
+            if (!response.IsSuccessStatusCode)
             {
-                var data = await response.Content.ReadFromJsonAsync<StandingsApiResponse>(cancellationToken: cancellationToken);
-                var standingsList = data?.Response.FirstOrDefault()?.League.Standings.FirstOrDefault();
-
-                if (standingsList is not null && standingsList.Count > 0)
-                {
-                    IReadOnlyList<Team> teams = standingsList.Select(item => new Team(
-                        Name: item.Team.Name,
-                        League: league.DisplayName,
-                        HomeGoalsScoredAvg: Math.Round((double)item.Home.Goals.For / Math.Max(1, item.Home.Played), 2),
-                        HomeGoalsConcededAvg: Math.Round((double)item.Home.Goals.Against / Math.Max(1, item.Home.Played), 2),
-                        AwayGoalsScoredAvg: Math.Round((double)item.Away.Goals.For / Math.Max(1, item.Away.Played), 2),
-                        AwayGoalsConcededAvg: Math.Round((double)item.Away.Goals.Against / Math.Max(1, item.Away.Played), 2)
-                    )).ToArray();
-
-                    StandingsCache[leagueId] = teams;
-                    return DataResult<IReadOnlyList<Team>>.Live(teams);
-                }
+                return CreateFallbackResult(league.DisplayName, $"Standings request returned HTTP {(int)response.StatusCode} ({response.StatusCode}).");
             }
+
+            var data = JsonSerializer.Deserialize<StandingsApiResponse>(rawJson);
+            var standingsList = data?.Response.FirstOrDefault()?.League.Standings.FirstOrDefault();
+            Console.WriteLine($"[FootballStats] Parsed standings rows: {standingsList?.Count ?? 0}");
+
+            if (standingsList is not { Count: > 0 })
+            {
+                return CreateFallbackResult(league.DisplayName, "The standings response contained no teams.");
+            }
+
+            IReadOnlyList<Team> teams = standingsList.Select(item => new Team(
+                Name: item.Team.Name,
+                League: league.DisplayName,
+                HomeGoalsScoredAvg: Math.Round((double)item.Home.Goals.For / Math.Max(1, item.Home.Played), 2),
+                HomeGoalsConcededAvg: Math.Round((double)item.Home.Goals.Against / Math.Max(1, item.Home.Played), 2),
+                AwayGoalsScoredAvg: Math.Round((double)item.Away.Goals.For / Math.Max(1, item.Away.Played), 2),
+                AwayGoalsConcededAvg: Math.Round((double)item.Away.Goals.Against / Math.Max(1, item.Away.Played), 2)
+            )).ToArray();
+
+            StandingsCache[leagueId] = teams;
+            return DataResult<IReadOnlyList<Team>>.Live(teams);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
             throw;
         }
-        catch
+        catch (Exception exception)
         {
-            // Ignorera fel tyst så att appen inte kraschar eller faller tillbaka på demo
+            Console.WriteLine($"[FootballStats] Request/deserialization failed for league={leagueId}, season={league.Season}: {exception}");
+            return CreateFallbackResult(league.DisplayName, exception.Message);
         }
-
-        // 3. Vid fel eller om API:et nekar, returnera lagstatistik markerad som Live
-        var fallback = GetFallbackTeams(league.DisplayName);
-        StandingsCache[leagueId] = fallback;
-        return DataResult<IReadOnlyList<Team>>.Live(fallback);
     }
 
     public async Task<List<Team>> FetchLeagueStatsAsync(int leagueId, string leagueName, int season = 2026)
@@ -83,5 +84,13 @@ public class FootballStatsService : ILeagueStatisticsRepository
         var fallback = new TeamDataService();
         var teams = fallback.Teams.Where(t => t.League == leagueName).ToArray();
         return teams.Length > 0 ? teams : [];
+    }
+
+    private static DataResult<IReadOnlyList<Team>> CreateFallbackResult(string leagueName, string reason)
+    {
+        var fallback = GetFallbackTeams(leagueName);
+        return fallback.Count > 0
+            ? DataResult<IReadOnlyList<Team>>.Demo(fallback, $"Live standings unavailable; using fallback data. {reason}")
+            : DataResult<IReadOnlyList<Team>>.Unavailable(reason);
     }
 }

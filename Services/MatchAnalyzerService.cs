@@ -7,35 +7,28 @@ namespace OddsAnalytics.Services;
 
 public class MatchAnalyzerService
 {
-    // Injectar automatiskt ALLA registrerade strategier från Program.cs
-    private readonly IEnumerable<ILeagueAnalysisStrategy> _strategies;
+    private readonly IEnumerable<OddsAnalytics.Services.Strategies.ILeagueAnalysisStrategy> _strategies;
 
-    public MatchAnalyzerService(IEnumerable<ILeagueAnalysisStrategy> strategies)
+    public MatchAnalyzerService(IEnumerable<OddsAnalytics.Services.Strategies.ILeagueAnalysisStrategy> strategies)
     {
         _strategies = strategies;
     }
 
-    public MatchProbabilities Analyze(Team home, Team away, LeagueConfig config)
-    {
-        var strategy = GetStrategy(config.Sport);
-        return strategy.Analyze(home, away, config);
-    }
+    public MatchProbabilities Analyze(Team home, Team away, LeagueConfig config) =>
+        GetStrategy(config.Sport).Analyze(home, away, config);
 
-    public double[,] GenerateScoreMatrix(Team home, Team away, LeagueConfig config, int maxGoals = 5)
-    {
-        var strategy = GetStrategy(config.Sport);
-        // Öka maxmål för hockey-heatmaps
-        int goals = config.Sport == SportCategory.IceHockey ? 7 : maxGoals;
-        return strategy.GenerateScoreMatrix(home, away, config, goals);
-    }
+    public double[,] GenerateScoreMatrix(Team home, Team away, LeagueConfig config, int maxGoals = 5) =>
+        GetStrategy(config.Sport).GenerateScoreMatrix(home, away, config, maxGoals);
 
-    private ILeagueAnalysisStrategy GetStrategy(SportCategory sport)
+    private OddsAnalytics.Services.Strategies.ILeagueAnalysisStrategy GetStrategy(SportCategory sport)
     {
         var strategy = _strategies.FirstOrDefault(s => s.Sport == sport);
+
         if (strategy == null)
         {
             throw new InvalidOperationException($"Ingen analysstrategi hittades för sporten: {sport}");
         }
+
         return strategy;
     }
 }

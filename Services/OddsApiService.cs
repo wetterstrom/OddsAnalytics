@@ -1,4 +1,4 @@
-﻿using System.Net.Http.Json;
+﻿using System.Text.Json;
 using OddsAnalytics.Models;
 
 namespace OddsAnalytics.Services;
@@ -22,13 +22,15 @@ public class OddsApiService : IUpcomingMatchRepository
         try
         {
             var sportKey = Uri.EscapeDataString(league.OddsApiSportKey);
-            var response = await _http.GetAsync(
-                $"odds/{sportKey}",
-                cancellationToken);
+            var requestUri = $"odds/{sportKey}";
+            Console.WriteLine($"[OddsApi] GET {_http.BaseAddress}{requestUri}");
+            using var response = await _http.GetAsync(requestUri, cancellationToken);
+            var rawJson = await response.Content.ReadAsStringAsync(cancellationToken);
+            Console.WriteLine($"[OddsApi] HTTP {(int)response.StatusCode} {response.StatusCode}; response: {rawJson}");
             if (!response.IsSuccessStatusCode)
                 return DataResult<IReadOnlyList<MatchOdds>>.Unavailable($"The odds feed returned HTTP {(int)response.StatusCode}.");
 
-            var data = await response.Content.ReadFromJsonAsync<List<OddsApiResponse>>(cancellationToken: cancellationToken);
+            var data = JsonSerializer.Deserialize<List<OddsApiResponse>>(rawJson);
             var matches = new List<MatchOdds>();
 
             foreach (var match in data ?? [])
@@ -58,6 +60,7 @@ public class OddsApiService : IUpcomingMatchRepository
                     away.Price));
             }
 
+            Console.WriteLine($"[OddsApi] Parsed events: {data?.Count ?? 0}; usable matches: {matches.Count}");
             return DataResult<IReadOnlyList<MatchOdds>>.Live(matches);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
@@ -66,6 +69,7 @@ public class OddsApiService : IUpcomingMatchRepository
         }
         catch (Exception exception)
         {
+            Console.WriteLine($"[OddsApi] Request/deserialization failed for sportKey={league.OddsApiSportKey}: {exception}");
             return DataResult<IReadOnlyList<MatchOdds>>.Unavailable($"Odds could not be loaded: {exception.Message}");
         }
     }
@@ -75,7 +79,12 @@ public class OddsApiService : IUpcomingMatchRepository
         try
         {
             var url = $"odds/{Uri.EscapeDataString(sportKey)}";
-            var matches = await _http.GetFromJsonAsync<List<OddsApiResponse>>(url);
+            Console.WriteLine($"[OddsApi] GET {_http.BaseAddress}{url}");
+            using var response = await _http.GetAsync(url);
+            var rawJson = await response.Content.ReadAsStringAsync();
+            Console.WriteLine($"[OddsApi] HTTP {(int)response.StatusCode} {response.StatusCode}; response: {rawJson}");
+            response.EnsureSuccessStatusCode();
+            var matches = JsonSerializer.Deserialize<List<OddsApiResponse>>(rawJson);
 
             if (matches == null || matches.Count == 0)
                 return GetDemoMatches(sportKey);
@@ -111,8 +120,9 @@ public class OddsApiService : IUpcomingMatchRepository
 
             return result.Count > 0 ? result : GetDemoMatches(sportKey);
         }
-        catch
+        catch (Exception exception)
         {
+            Console.WriteLine($"[OddsApi] Legacy odds request failed for sportKey={sportKey}: {exception}");
             return GetDemoMatches(sportKey);
         }
     }

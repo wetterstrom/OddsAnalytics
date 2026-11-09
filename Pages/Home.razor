@@ -564,8 +564,10 @@
             currentDataStatus = currentDataIsDemo
                 ? $"DEMO DATA — simulated feed for {currentConfig.DisplayName}."
                 : !teamsResult.IsAvailable || !matchesResult.IsAvailable
-                    ? $"Live data unavailable for {currentConfig.DisplayName}."
+                    ? $"Live data unavailable for {currentConfig.DisplayName}. {teamsResult.Message} {matchesResult.Message}".Trim()
                     : $"Live data loaded for {currentConfig.DisplayName}.";
+
+            Console.WriteLine($"[Home] {currentConfig.DisplayName}: teams={currentTeams.Count} ({teamsResult.Availability}); matches={upcomingMatches.Count} ({matchesResult.Availability}); teamsMessage={teamsResult.Message}; matchesMessage={matchesResult.Message}");
 
             RunRoundScanner();
 
@@ -583,8 +585,9 @@
                 RecalculateSingle();
             }
         }
-        catch
+        catch (Exception exception)
         {
+            Console.WriteLine($"[Home] Failed to load data for {currentConfig.DisplayName}: {exception}");
             currentTeams = new();
             upcomingMatches = new();
             allScannedValueBets = new();

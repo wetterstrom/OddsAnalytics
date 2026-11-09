@@ -1,66 +1,47 @@
 ﻿using System;
-using System.Net.Http;
-using System.Threading.Tasks;
 using Microsoft.AspNetCore.Components.Web;
 using Microsoft.AspNetCore.Components.WebAssembly.Hosting;
 using OddsAnalytics;
 using OddsAnalytics.Services;
+using OddsAnalytics.Services.Strategies;
+using OddsAnalytics.Models;
 
-namespace OddsAnalytics
+var builder = WebAssemblyHostBuilder.CreateDefault(args);
+builder.RootComponents.Add<App>("#app");
+builder.RootComponents.Add<HeadOutlet>("head::after");
+
+// 1. Säker konfiguration av Worker-URL (kraschar aldrig om appsettings saknas)
+var configuredUrl = builder.Configuration["Cloudflare:WorkerBaseUrl"];
+const string defaultWorkerUrl = "https://football-proxy.robinwetterstrom.workers.dev/";
+
+var validWorkerUrl = (!string.IsNullOrWhiteSpace(configuredUrl) &&
+                      Uri.TryCreate(configuredUrl, UriKind.Absolute, out var parsedUri) &&
+                      parsedUri.Scheme == Uri.UriSchemeHttps)
+    ? configuredUrl
+    : defaultWorkerUrl;
+
+if (!validWorkerUrl.EndsWith("/"))
 {
-    public class Program
-    {
-        public static async Task Main(string[] args)
-        {
-            var builder = WebAssemblyHostBuilder.CreateDefault(args);
-            builder.RootComponents.Add<App>("#app");
-            builder.RootComponents.Add<HeadOutlet>("head::after");
-
-            var useDevelopmentMocks = builder.HostEnvironment.IsDevelopment();
-            // Läs från appsettings, men fall tillbaka på din Cloudflare Worker om GitHub Pages missar json-filen
-            var configuredWorkerUrl = builder.Configuration["Cloudflare:WorkerBaseUrl"];
-
-            Uri workerBaseUri;
-
-            if (!string.IsNullOrWhiteSpace(configuredWorkerUrl) &&
-                Uri.TryCreate(configuredWorkerUrl, UriKind.Absolute, out var parsedWorkerUri))
-            {
-                workerBaseUri = parsedWorkerUri;
-            }
-            else
-            {
-                workerBaseUri = new Uri(
-                    "https://football-proxy.robinwetterstrom.workers.dev/",
-                    UriKind.Absolute);
-            }
-
-            builder.Services.AddScoped(_ => new HttpClient
-            {
-                BaseAddress = workerBaseUri
-            });
-
-            builder.Services.AddScoped<IDemoSportsDataFactory, DemoSportsDataFactory>();
-            builder.Services.AddScoped<OddsApiService>();
-            builder.Services.AddScoped<FootballStatsService>();
-            builder.Services.AddScoped<IUpcomingMatchRepository>(services =>
-                new DevelopmentFallbackMatchRepository(
-                    new CachedUpcomingMatchRepository(services.GetRequiredService<OddsApiService>()),
-                    services.GetRequiredService<IDemoSportsDataFactory>(),
-                    useDevelopmentMocks));
-            builder.Services.AddScoped<ILeagueStatisticsRepository>(services =>
-                new DevelopmentFallbackStatisticsRepository(
-                    new CachedLeagueStatisticsRepository(services.GetRequiredService<FootballStatsService>()),
-                    services.GetRequiredService<IDemoSportsDataFactory>(),
-                    useDevelopmentMocks));
-            builder.Services.AddScoped<ILeagueAnalysisStrategy, FootballPredictionStrategy>();
-            builder.Services.AddScoped<ILeagueAnalysisStrategy, HockeyPredictionStrategy>();
-            builder.Services.AddScoped<MatchAnalyzerService>();
-            builder.Services.AddScoped<DailyBestBetsViewModel>();
-            builder.Services.AddScoped<IStryktipsSystemFactory, StryktipsSystemFactory>();
-            builder.Services.AddScoped<IPoolCouponRepository, SvenskaSpelPoolCouponRepository>();
-            builder.Services.AddScoped<PoolCouponViewModel>();
-
-            await builder.Build().RunAsync();
-        }
-    }
+    validWorkerUrl += "/";
 }
+
+builder.Services.AddScoped(sp => new HttpClient
+{
+    BaseAddress = new Uri(validWorkerUrl)
+});
+
+// 2. Registrera analysstrategier (Football & Hockey)
+builder.Services.AddSingleton<OddsAnalytics.Services.Strategies.ILeagueAnalysisStrategy, FootballPredictionStrategy>();
+builder.Services.AddSingleton<OddsAnalytics.Services.Strategies.ILeagueAnalysisStrategy, HockeyPredictionStrategy>();
+
+// 3. Registrera domän- och applikationstjänster
+builder.Services.AddSingleton<TeamDataService>();
+builder.Services.AddSingleton<TeamNameNormalizer>();
+
+// 4. Registrera repositories och ViewModels som Home.razor kräver
+builder.Services.AddScoped<OddsAnalytics.Services.ILeagueStatisticsRepository, FootballStatsService>();
+builder.Services.AddScoped<OddsAnalytics.Services.IUpcomingMatchRepository, OddsApiService>();
+builder.Services.AddScoped<MatchAnalyzerService>();
+builder.Services.AddScoped<DailyBestBetsViewModel>();
+
+await builder.Build().RunAsync();
