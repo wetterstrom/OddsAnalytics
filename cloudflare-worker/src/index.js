@@ -116,6 +116,14 @@ export default {
         return upstreamResponse(request, env, upstream);
       }
 
+      if (url.pathname === "/nhl/standings") {
+        const upstream = await fetch("https://api-web.nhle.com/v1/standings/now", {
+          headers: { Accept: "application/json" },
+          cf: { cacheTtl: 300, cacheEverything: true }
+        });
+        return upstreamResponse(request, env, upstream);
+      }
+
       const drawNumber = pathSegments.length === 3
         && pathSegments[0] === "stryktips"
         && pathSegments[1] === "draws"

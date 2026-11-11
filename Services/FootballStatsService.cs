@@ -81,9 +81,8 @@ public class FootballStatsService : ILeagueStatisticsRepository
 
     private static IReadOnlyList<Team> GetFallbackTeams(string leagueName)
     {
-        var fallback = new TeamDataService();
-        var teams = fallback.Teams.Where(t => t.League == leagueName).ToArray();
-        return teams.Length > 0 ? teams : [];
+
+        return new List<Team>();
     }
 
     private static DataResult<IReadOnlyList<Team>> CreateFallbackResult(string leagueName, string reason)

@@ -34,13 +34,19 @@ builder.Services.AddScoped(sp => new HttpClient
 builder.Services.AddSingleton<OddsAnalytics.Services.Strategies.ILeagueAnalysisStrategy, FootballPredictionStrategy>();
 builder.Services.AddSingleton<OddsAnalytics.Services.Strategies.ILeagueAnalysisStrategy, HockeyPredictionStrategy>();
 
-// 3. Registrera domän- och applikationstjänster
-builder.Services.AddSingleton<TeamDataService>();
+builder.Services.AddSingleton<OddsAnalytics.Services.IDemoSportsDataFactory, OddsAnalytics.Services.DemoSportsDataFactory>();
+builder.Services.AddScoped<OddsAnalytics.Services.NhlStatsService>();
 builder.Services.AddSingleton<TeamNameNormalizer>();
 
 // 4. Registrera repositories och ViewModels som Home.razor kräver
-builder.Services.AddScoped<OddsAnalytics.Services.ILeagueStatisticsRepository, FootballStatsService>();
-builder.Services.AddScoped<OddsAnalytics.Services.IUpcomingMatchRepository, OddsApiService>();
+// Registrera konkreta tjänster först
+builder.Services.AddScoped<FootballStatsService>();
+builder.Services.AddScoped<OddsApiService>();
+
+// Mappa gränssnitt till samma instanser
+builder.Services.AddScoped<OddsAnalytics.Services.ILeagueStatisticsRepository>(sp => sp.GetRequiredService<FootballStatsService>());
+builder.Services.AddScoped<OddsAnalytics.Services.IUpcomingMatchRepository>(sp => sp.GetRequiredService<OddsApiService>());
+
 builder.Services.AddScoped<MatchAnalyzerService>();
 builder.Services.AddScoped<DailyBestBetsViewModel>();
 

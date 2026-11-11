@@ -5,6 +5,11 @@
 @inject OddsAnalytics.Services.ILeagueStatisticsRepository StatisticsRepository
 @using OddsAnalytics.Models
 @using OddsAnalytics.Services
+@inject OddsAnalytics.Services.NhlStatsService NhlService
+@inject OddsAnalytics.Services.FootballStatsService StatsService
+@inject OddsAnalytics.Services.OddsApiService OddsService
+
+
 
 <PageTitle>OddsAnalytics Pro</PageTitle>
 
@@ -536,69 +541,55 @@
         await ReloadAllData();
     }
 
-    private async Task ReloadAllData()
+   private async Task ReloadAllData()
     {
         isLoading = true;
 
         try
         {
-            var teamsTask = StatisticsRepository.GetTeamsAsync(currentConfig);
-            var matchesTask = MatchRepository.GetUpcomingMatchesAsync(currentConfig);
-            await Task.WhenAll(teamsTask, matchesTask);
-
-            var teamsResult = await teamsTask;
-            var matchesResult = await matchesTask;
-            currentTeams = teamsResult.Data?.ToList() ?? [];
-            upcomingMatches = matchesResult.Data?.Select(match => new ExtractedMatchOdds(
-                match.Id,
-                match.HomeTeam,
-                match.AwayTeam,
-                match.Kickoff,
-                match.BookmakerName,
-                match.OddsHome,
-                match.OddsDraw ?? 0,
-                match.OddsAway)).ToList() ?? [];
-
-            currentDataIsDemo = teamsResult.Availability == DataAvailability.Demo
-                || matchesResult.Availability == DataAvailability.Demo;
-            currentDataStatus = currentDataIsDemo
-                ? $"DEMO DATA — simulated feed for {currentConfig.DisplayName}."
-                : !teamsResult.IsAvailable || !matchesResult.IsAvailable
-                    ? $"Live data unavailable for {currentConfig.DisplayName}. {teamsResult.Message} {matchesResult.Message}".Trim()
-                    : $"Live data loaded for {currentConfig.DisplayName}.";
-
-            Console.WriteLine($"[Home] {currentConfig.DisplayName}: teams={currentTeams.Count} ({teamsResult.Availability}); matches={upcomingMatches.Count} ({matchesResult.Availability}); teamsMessage={teamsResult.Message}; matchesMessage={matchesResult.Message}");
-
-            RunRoundScanner();
-
-            if (upcomingMatches.Count > 0)
+            if (currentConfig.Sport == SportCategory.IceHockey)
             {
-                selectedMatchId = upcomingMatches[0].MatchId;
-                ApplyMatch(upcomingMatches[0]);
+                // NHL via Workern, övriga hockeyligor får demofallback i tjänsten
+                currentTeams = await NhlService.FetchStandingsAsync(currentConfig.Key);
             }
             else
             {
-                selectedMatch = null;
-                selectedMatchId = "";
-                homeTeam = "";
-                awayTeam = "";
-                RecalculateSingle();
+                // Anropar API-Sports via Workern (hanterar alla fotbollslag automatiskt)
+                currentTeams = await StatsService.FetchLeagueStatsAsync(currentConfig.ApiFootballId!.Value, currentConfig.DisplayName, currentConfig.Season);
+            }
+
+            Console.WriteLine($"[Home] {currentConfig.DisplayName}: {currentTeams.Count} lag laddade.");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[Home] Laddning av lag för {currentConfig.DisplayName} misslyckades: {ex.GetType().Name}: {ex.Message}");
+            currentTeams = new();
+        }
+
+        try
+        {
+            if (!string.IsNullOrWhiteSpace(currentConfig.OddsApiSportKey))
+            {
+                upcomingMatches = await OddsService.FetchUpcomingOddsAsync(currentConfig.OddsApiSportKey);
+                RunRoundScanner();
+                if (upcomingMatches.Count > 0)
+                {
+                    selectedMatchId = upcomingMatches[0].MatchId;
+                    ApplyMatch(upcomingMatches[0]);
+                }
+            }
+            else
+            {
+                Console.WriteLine($"[Home] {currentConfig.DisplayName} saknar OddsApiSportKey - hoppar över odds.");
+                upcomingMatches = new();
             }
         }
-        catch (Exception exception)
+        catch (Exception ex)
         {
-            Console.WriteLine($"[Home] Failed to load data for {currentConfig.DisplayName}: {exception}");
-            currentTeams = new();
-            upcomingMatches = new();
-            allScannedValueBets = new();
-            filteredValueBets = new();
-            currentDataStatus = $"Data unavailable for {currentConfig.DisplayName}.";
-            currentDataIsDemo = false;
+            Console.WriteLine($"[Home] Odds-hämtning för {currentConfig.DisplayName} misslyckades: {ex.GetType().Name}: {ex.Message}");
         }
-        finally
-        {
-            isLoading = false;
-        }
+
+        isLoading = false;
     }
 
     private void RunRoundScanner()
@@ -614,24 +605,47 @@
         ApplyFilter();
     }
 
-    private async Task ScanAllLeaguesForToday()
+   private async Task ScanAllLeaguesForToday()
     {
+        if (isScanningAll) return;
         isScanningAll = true;
         scanProgressText = $"Scannar {DailyBetsViewModel.SelectedDate:yyyy-MM-dd}...";
         StateHasChanged();
 
-        try
+        var allToday = new List<ScannedValueBet>();
+        var today = DailyBetsViewModel.SelectedDate;
+
+
+
+
+       foreach (var league in LeagueCatalog.AllLeagues)
         {
-            await DailyBetsViewModel.LoadAsync(DailyBetsViewModel.SelectedDate);
-            todaysValueBets = DailyBetsViewModel.Bets.ToList();
-            ApplyFilterToday();
+            try
+            {
+                List<Team> teams = league.Sport.ToString().Equals("Hockey", StringComparison.OrdinalIgnoreCase)
+                    ? await NhlService.FetchNhlStandingsAsync()
+                    : await StatsService.FetchLeagueStatsAsync(league.ApiFootballId.Value, league.DisplayName, league.Season);
+
+                var matches = await OddsService.FetchUpcomingOddsAsync(league.OddsApiSportKey);
+
+                foreach (var match in matches)
+                {
+                    if (DateOnly.FromDateTime(match.Kickoff.ToLocalTime()) != today) continue;
+                    EvaluateAndAddAllMarkets(allToday, match, teams, league.Key, league.DisplayName);
+                }
+            }
+            catch { }
+
+           
+            // Pausar i 6.5 sekunder för att undvika "Rate Limit" hos API-Sports (max 10 anrop/min)
+            await Task.Delay(6500);
         }
-        finally
-        {
-            isScanningAll = DailyBetsViewModel.IsLoading;
-            scanProgressText = "";
-            StateHasChanged();
-        }
+
+        todaysValueBets = allToday.OrderByDescending(b => b.ExpectedValue).ToList();
+        ApplyFilterToday();
+
+        isScanningAll = false;
+        StateHasChanged();
     }
 
     private async Task OnDailyDateChanged(ChangeEventArgs args)
